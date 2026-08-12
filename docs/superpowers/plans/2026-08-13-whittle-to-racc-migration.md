@@ -1,8 +1,12 @@
 # Plan: Migrate PGN parser from whittle to Racc + StringScanner
 
 Date: 2026-08-13
+Status: **COMPLETE** (all 8 tasks done; 187 examples green; whittle removed).
 Branch: `racc-migration` (branched from `faster` after baseline commit)
 Fallback: tag `pre-racc` on the pre-migration commit.
+
+Result: parse-only allocations -55% objects / -70% bytes, parse-only
+throughput ~3.5x faster (741 -> 212 ms/i). See `bench/IMPROVEMENTS.md`.
 
 ## Goal
 
