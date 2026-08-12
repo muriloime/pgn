@@ -1,0 +1,38 @@
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.0
+  SuggestExtensions: false
+  Exclude:
+    - "bin/**/*"
+    - "bench/**/*"
+    - "vendor/**/*"
+    - "pkg/**/*"
+
+# This is a small, mostly-stable gem; skip mandatory top-level docs.
+Style/Documentation:
+  Enabled: false
+
+Style/StringLiterals:
+  EnforcedStyle: single_quotes
+
+Style/FrozenStringLiteralComment:
+  EnabledForRuby: false
+  Enabled: true
+
+Layout/LineLength:
+  Max: 100
+
+# The SAN/PGN grammar and move-calculation logic are inherently branchy;
+# don't fight the domain, just keep an eye on egregious cases.
+Metrics/MethodLength:
+  Max: 20
+
+Metrics/AbcSize:
+  Max: 25
+
+Metrics/ClassLength:
+  Max: 150
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"

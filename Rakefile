@@ -1,4 +1,7 @@
 require "bundler/gem_tasks"
+require "rubocop/rake_task"
+
+RuboCop::RakeTask.new
 
 namespace :bench do
   desc "Run move/board profiling and write bench/baseline_moves.txt"

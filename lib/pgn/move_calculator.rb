@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module PGN
   # {PGN::MoveCalculator} is responsible for computing all of the ways that a
   # specific move changes the current position. This includes which squares on
@@ -80,9 +82,7 @@ module PGN
       }
     }.freeze
 
-    attr_accessor :board
-    attr_accessor :move
-    attr_accessor :origin
+    attr_accessor :board, :move, :origin
 
     # @param board [PGN::Board] the current board
     # @param move [PGN::Move] the current move
@@ -149,12 +149,12 @@ module PGN
     def en_passant_square
       return nil if move.castle
 
-      if move.pawn? && (origin[1].to_i - move.destination[1].to_i).abs == 2
-        if move.white?
-          origin[0] + '3'
-        else
-          origin[0] + '6'
-end
+      return unless move.pawn? && (origin[1].to_i - move.destination[1].to_i).abs == 2
+
+      if move.white?
+        "#{origin[0]}3"
+      else
+        "#{origin[0]}6"
       end
     end
 
@@ -260,7 +260,7 @@ end
         possibilities.select { |p| board.position_for(p).match(move.disambiguation) }
       else
         possibilities
-end
+      end
     end
 
     # A pawn can't move two spaces if there is a pawn in front of it.
@@ -270,17 +270,19 @@ end
         possibilities.reject { |p| board.position_for(p).match(/2|7/) }
       else
         possibilities
-end
+      end
     end
 
     # A piece can't move if it would result in a discovered check.
     #
     def disambiguate_discovered_check(possibilities)
+      king_pos = king_position
+
       DIRECTIONS.each do |attacking_piece, directions|
         attacking_piece = attacking_piece.upcase if move.black?
 
         directions.each do |dir|
-          piece, square = first_piece(king_position, dir)
+          piece, square = first_piece(king_pos, dir)
           next unless piece == move.piece && possibilities.include?(square)
 
           piece, = first_piece(square, dir)
@@ -298,7 +300,7 @@ end
       piece = nil
 
       while valid_square?(file += i, rank += j)
-        break if piece = board.at(file, rank)
+        break if (piece = board.at(file, rank))
       end
 
       [piece, [file, rank]]
@@ -326,7 +328,7 @@ end
     end
 
     def valid_square?(file, rank)
-      (0..7) === file && (0..7) === rank
+      (0..7).include?(file) && (0..7).include?(rank)
     end
 
     def destination_coords

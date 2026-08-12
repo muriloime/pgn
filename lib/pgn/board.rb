@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module PGN
   # {PGN::Board} represents the squares of a chess board and the pieces on
   # each square. It is responsible for translating between a human readable
@@ -73,21 +75,9 @@ module PGN
     #
     def initialize(squares)
       self.squares = squares
+      @owned = Array.new(8, false)
     end
 
-    # @overload at(str)
-    #   Looks up a piece based on the string representation of a square (e4)
-    #   @param str [String] the square in algebraic notation
-    # @overload at(file, rank)
-    #   Looks up a piece based on zero-indexed coordinates (4, 3)
-    #   @param file [Integer] the file the piece is on
-    #   @param rank [Integer] the rank the piece is on
-    # @return [String, nil] the piece on the square, or nil if it is
-    #   empty
-    # @example
-    #   board.at(4,3)  #=> "P"
-    #   board.at("e4") #=> "P"
-    #
     # @overload at(str)
     #   Looks up a piece based on the string representation of a square (e4)
     #   @param str [String] the square in algebraic notation
@@ -105,7 +95,8 @@ module PGN
     # so the common string lookup allocates nothing.
     def at(arg0, arg1 = nil)
       return squares[arg0][arg1] unless arg1.nil?
-      squares[arg0.getbyte(0) - 97][arg0.getbyte(1) - 49]
+
+      squares[file_of(arg0)][rank_of(arg0)]
     end
 
     # @param changes [Hash<String, <String, nil>>] changes to make to the board
@@ -126,13 +117,16 @@ module PGN
     # @example
     #   board.update("e4", "P")
     #
-    # Copy-on-write: clone only the column being mutated so unchanged
-    # columns stay shared with any board this one was duped from.
+    # Copy-on-write: clone only the column being mutated, and only once per
+    # instance, so unchanged columns stay shared with any board this one was
+    # duped from.
     def update(square, piece)
-      file = square.getbyte(0) - 97
-      rank = square.getbyte(1) - 49
-      squares[file] = squares[file].dup
-      squares[file][rank] = piece
+      file = file_of(square)
+      unless @owned[file]
+        squares[file] = squares[file].dup
+        @owned[file] = true
+      end
+      squares[file][rank_of(square)] = piece
       self
     end
 
@@ -141,13 +135,8 @@ module PGN
     # @example
     #   board.coordinates_for("e4") #=> [4, 3]
     #
-    # @param position [String] the square in algebraic notation
-    # @return [Array<Integer>] the coordinates of the square
-    # @example
-    #   board.coordinates_for("e4") #=> [4, 3]
-    #
     def coordinates_for(position)
-      [position.getbyte(0) - 97, position.getbyte(1) - 49]
+      [file_of(position), rank_of(position)]
     end
 
     # @param coordinates [Array<Integer>] the coordinates of the square
@@ -177,6 +166,16 @@ module PGN
     #
     def dup
       PGN::Board.new(squares.dup)
+    end
+
+    private
+
+    def file_of(square)
+      square.getbyte(0) - 97
+    end
+
+    def rank_of(square)
+      square.getbyte(1) - 49
     end
   end
 end
