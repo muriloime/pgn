@@ -122,7 +122,15 @@ module PGN
            .gsub('"') { "\\\"" }
     end
 
-    # Escape backslashes and braces for a comment body (block form, literal).
+    # Escape backslashes and braces for a comment body (block form, so the
+    # replacement string is taken literally — gsub's string replacement
+    # would otherwise re-interpret backslashes).
+    #
+    # Note: the current parser's `MoveText#clean_text` does not unescape,
+    # so comments containing literal braces (e.g. the `nested_comments.pgn`
+    # fixture) will not round-trip byte-for-byte until parser improvements
+    # (sub-project 3) add unescaping. This matches the design spec's
+    # acknowledged v1 limitation.
     def escape_comment(text)
       text.to_s
           .gsub("\\") { "\\\\" }
