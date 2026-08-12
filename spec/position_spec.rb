@@ -52,3 +52,76 @@ describe PGN::Position do
     end
   end
 end
+
+# New exhaustive coverage below. Existing `should` examples above are
+# intentionally left untouched.
+
+describe PGN::Position do
+  describe '.start attributes' do
+    it 'has the expected starting state' do
+      pos = PGN::Position.start
+      expect(pos.player).to eq(:white)
+      expect(pos.castling).to eq(%w[K Q k q])
+      expect(pos.en_passant).to be_nil
+      expect(pos.halfmove).to eq(0)
+      expect(pos.fullmove).to eq(1)
+    end
+  end
+
+  describe '#next_player' do
+    it 'toggles white to black and back' do
+      expect(PGN::Position.start.next_player).to eq(:black)
+      expect(PGN::Position.start.move('e4').next_player).to eq(:white)
+    end
+  end
+
+  describe '#move' do
+    it 'returns a new PGN::Position and does not mutate the source' do
+      pos = PGN::Position.start
+      nxt = pos.move('e4')
+      expect(nxt).to be_a(PGN::Position)
+      expect(nxt).not_to be(pos)
+      expect(pos.board.at('e4')).to be_nil
+      expect(pos.player).to eq(:white)
+    end
+
+    it 'toggles the player to move' do
+      expect(PGN::Position.start.move('e4').player).to eq(:black)
+      expect(PGN::Position.start.move('e4').move('e5').player).to eq(:white)
+    end
+
+    it 'updates state after 1.e4' do
+      nxt = PGN::Position.start.move('e4')
+      expect(nxt.en_passant).to eq('e3')
+      expect(nxt.halfmove).to eq(0)
+      expect(nxt.fullmove).to eq(1)
+      expect(nxt.board.at('e4')).to eq('P')
+      expect(nxt.board.at('e2')).to be_nil
+    end
+
+    it 'updates state after 1.e4 e5' do
+      nxt = PGN::Position.start.move('e4').move('e5')
+      expect(nxt.player).to eq(:white)
+      expect(nxt.en_passant).to eq('e6')
+      expect(nxt.fullmove).to eq(2)
+    end
+
+    it 'propagates castling restrictions' do
+      fen = 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1'
+      nxt = PGN::FEN.new(fen).to_position.move('O-O')
+      expect(nxt.castling.sort).to eq(%w[k q])
+    end
+  end
+
+  describe '#to_fen' do
+    it 'round-trips the start position to FEN::INITIAL' do
+      expect(PGN::Position.start.to_fen.to_s).to eq(PGN::FEN::INITIAL)
+    end
+
+    it 'round-trips an arbitrary position through FEN' do
+      fen = 'r1bqkb1r/pp1p1ppp/2n1pn2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 3 6'
+      parsed = PGN::FEN.new(fen).to_position
+      expect(parsed.to_fen.to_s).to eq(fen)
+    end
+  end
+end
