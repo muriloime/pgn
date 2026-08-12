@@ -1,20 +1,16 @@
-require 'pgn/whittle_parser'
+require 'pgn/pgn_parser'
 
 module PGN
   # {PGN::Parser} is the public entry point for parsing PGN text into a list
-  # of {PGN::Game} objects. It delegates to a concrete backend parser.
+  # of game hashes. It delegates to a concrete backend parser (currently the
+  # stdlib Racc + StringScanner parser {PGN::PgnParser}).
   #
-  # During the migration from the abandoned +whittle+ gem to a stdlib
-  # +Racc+ + StringScanner parser, the backend is switchable here:
-  # {PGN::WhittleParser} (legacy) or {PGN::RaccParser} (target).
-  #
+  # The +backend+ class attribute is retained so callers (tests, benchmarks)
+  # can substitute an alternative parser responding to +new.parse(pgn_string)+.
   class Parser
-    # The backend parser class used by {.parse}.
-    #
-    # @return [Class] a parser responding to +new.parse(pgn_string)+ that
-    #   returns an Array of game Hashes with keys +:tags+, +:result+,
-    #   +:moves+, +:pgn+, +:comment+.
     class << self
+      # The backend parser class used by {.parse}.
+      # @return [Class]
       attr_accessor :backend
     end
 
@@ -23,7 +19,8 @@ module PGN
 
     # @param input [String] the raw PGN text (already force-encoded by the
     #   caller, e.g. via {PGN.parse}).
-    # @return [Array<Hash>] one Hash per game.
+    # @return [Array<Hash>] one Hash per game, with keys +:tags+, +:result+,
+    #   +:moves+, +:pgn+, +:comment+.
     def parse(input)
       self.class.backend.new.parse(input)
     end
