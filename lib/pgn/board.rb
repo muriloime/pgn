@@ -126,9 +126,13 @@ module PGN
     # @example
     #   board.update("e4", "P")
     #
+    # Copy-on-write: clone only the column being mutated so unchanged
+    # columns stay shared with any board this one was duped from.
     def update(square, piece)
-      coords = coordinates_for(square)
-      squares[coords[0]][coords[1]] = piece
+      file = square.getbyte(0) - 97
+      rank = square.getbyte(1) - 49
+      squares[file] = squares[file].dup
+      squares[file][rank] = piece
       self
     end
 
@@ -167,10 +171,12 @@ module PGN
       end.join("\n")
     end
 
-    # @return [PGN::Board] a copy of self with duplicated squares
+    # @return [PGN::Board] a copy of self. The outer array is copied; the
+    # 8 column arrays are shared and cloned lazily by #update on first
+    # mutation (copy-on-write).
     #
     def dup
-      PGN::Board.new(squares.map(&:dup))
+      PGN::Board.new(squares.dup)
     end
   end
 end
