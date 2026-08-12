@@ -29,5 +29,44 @@ describe PGN::Serializer do
       game = PGN::Game.new(%w[e4], { 'White' => 'A "B" \\C' }, '1-0')
       expect(PGN::Serializer.new(game).to_s).to start_with("[White \"A \\\"B\\\" \\\\C\"]\n")
     end
+
+    it 'serializes castling as O-O / O-O-O' do
+      game = PGN::Game.new(%w[O-O O-O-O])
+      expect(PGN::Serializer.new(game).to_s).to eq("[Result \"*\"]\n\n1. O-O O-O-O *\n")
+    end
+
+    it 'emits a single annotation after the notation' do
+      moves = [PGN::MoveText.new('e4', ['$4'])]
+      game = PGN::Game.new(moves, { 'White' => 'A' }, '1-0')
+      expect(PGN::Serializer.new(game).to_s).to eq("[White \"A\"]\n\n1. e4 $4 1-0\n")
+    end
+
+    it 'emits symbolic annotations verbatim' do
+      moves = [PGN::MoveText.new('e4', ['??'])]
+      game = PGN::Game.new(moves, { 'White' => 'A' }, '1-0')
+      expect(PGN::Serializer.new(game).to_s).to eq("[White \"A\"]\n\n1. e4 ?? 1-0\n")
+    end
+
+    it 'emits multiple annotations in order' do
+      moves = [PGN::MoveText.new('d4'), PGN::MoveText.new('d5', ['$2', '$11'])]
+      game = PGN::Game.new(moves, { 'White' => 'A' }, '1/2-1/2')
+      expect(PGN::Serializer.new(game).to_s).to eq("[White \"A\"]\n\n1. d4 d5 $2 $11 1/2-1/2\n")
+    end
+
+    it 'wraps move comments in braces with spaces' do
+      moves = [PGN::MoveText.new('e4', nil, 'good move')]
+      game = PGN::Game.new(moves, { 'White' => 'A' }, '1-0')
+      expect(PGN::Serializer.new(game).to_s).to eq("[White \"A\"]\n\n1. e4 { good move } 1-0\n")
+    end
+
+    it 'reproduces the variations.pgn movetext shape, including 2... after variations' do
+      game = PGN.parse(File.read('./spec/pgn_files/variations.pgn')).first
+      expected = "[Black \"Petrov\"]\n[White \"Somebody\"]\n\n" \
+                "1. e4 e5 2. Nf3 { comment } " \
+                "(2. f4 exf4 { final variation }) " \
+                "(2. Nc3 { other } 2... d5 (2... f5) 3. exd5) " \
+                "2... Nf6 *\n"
+      expect(PGN::Serializer.new(game).to_s).to eq(expected)
+    end
   end
 end
