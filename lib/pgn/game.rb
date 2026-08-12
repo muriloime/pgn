@@ -88,6 +88,13 @@ module PGN
         end
     end
 
+    # @return [String] a canonical PGN string for this game, ending with a
+    #   trailing newline.
+    #
+    def to_pgn
+      PGN::Serializer.new(self).to_s
+    end
+
     def initial_fen
       tags && tags['FEN']
     end
