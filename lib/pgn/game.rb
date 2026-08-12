@@ -81,9 +81,11 @@ module PGN
       @moves =
         moves.map do |m|
           if m.is_a? String
-            MoveText.new(m.gsub('0', 'O'))
+            MoveText.new(m.include?('0') ? m.gsub('0', 'O') : m)
           else
-            MoveText.new(m.notation.gsub('0', 'O'), m.annotation, m.comment, m.variations)
+            notation = m.notation
+            notation = notation.gsub('0', 'O') if notation.include?('0')
+            MoveText.new(notation, m.annotation, m.comment, m.variations)
           end
         end
     end

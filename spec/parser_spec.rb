@@ -139,5 +139,20 @@ describe PGN do
       game = games.last
       expect(game.comment).to eq('{game comment}')
     end
+
+    it 'tag_values with double quotes' do
+      games = PGN.parse(File.read('./spec/pgn_files/doublequotes.pgn'))
+      game = games.last
+      expect(game.tags['Event']).to eq('IRT BLITZ "Sub Zonal"')
+    end
+
+    it 'set encoding' do
+      file = File.read('./spec/pgn_files/specialcharacters.pgn')
+      games = PGN.parse(file, Encoding::UTF_8)
+      game1 = games.first
+      game2 = games.last
+      expect(game1.tags['WhiteTeam']).to eq('NARIÑO')
+      expect(game2.tags['Site']).to eq('HOTEL CAFEIRA Calle 18 Nro. 5 – 38 Centro de Pereira – Risaralda')
+    end
   end
 end

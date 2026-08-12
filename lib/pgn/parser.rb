@@ -11,14 +11,13 @@ module PGN
       ending = input.length
       @@pgn ||= ''
       @@game_comment ||= nil
-
       until offset == ending
         next_token(input, offset, line).tap do |token|
           if !token.nil?
             token[:offset] = offset
             line, token[:line] = token[:line], line
             yield token unless token[:discarded]
-            @@pgn += token[:value]
+            @@pgn << token[:value]
             offset += token[:value].length
           else
             raise Whittle::UnconsumedInputError,
@@ -131,7 +130,7 @@ module PGN
       string: /
         "                          # beginning of string
         (
-          [[:print:]&&[^\\"]] |    # printing characters except quote and backslash
+          [[:print:]&&[^\\]] |    # printing characters except backslash
           \\\\                |    # escaped backslashes
           \\"                      # escaped quotation marks
         )*                         # zero or more of the above
