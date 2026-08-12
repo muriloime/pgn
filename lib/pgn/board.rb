@@ -88,13 +88,24 @@ module PGN
     #   board.at(4,3)  #=> "P"
     #   board.at("e4") #=> "P"
     #
-    def at(*args)
-      case args.length
-      when 1
-        at(*coordinates_for(args.first))
-      when 2
-        squares[args[0]][args[1]]
-      end
+    # @overload at(str)
+    #   Looks up a piece based on the string representation of a square (e4)
+    #   @param str [String] the square in algebraic notation
+    # @overload at(file, rank)
+    #   Looks up a piece based on zero-indexed coordinates (4, 3)
+    #   @param file [Integer] the file the piece is on
+    #   @param rank [Integer] the rank the piece is on
+    # @return [String, nil] the piece on the square, or nil if it is
+    #   empty
+    # @example
+    #   board.at(4,3)  #=> "P"
+    #   board.at("e4") #=> "P"
+    #
+    # String squares are parsed with getbyte arithmetic (a=0x61, '1'=0x31)
+    # so the common string lookup allocates nothing.
+    def at(arg0, arg1 = nil)
+      return squares[arg0][arg1] unless arg1.nil?
+      squares[arg0.getbyte(0) - 97][arg0.getbyte(1) - 49]
     end
 
     # @param changes [Hash<String, <String, nil>>] changes to make to the board
@@ -126,11 +137,13 @@ module PGN
     # @example
     #   board.coordinates_for("e4") #=> [4, 3]
     #
+    # @param position [String] the square in algebraic notation
+    # @return [Array<Integer>] the coordinates of the square
+    # @example
+    #   board.coordinates_for("e4") #=> [4, 3]
+    #
     def coordinates_for(position)
-      file_chr, rank_chr = position.chars.to_a
-      file = FILE_TO_INDEX[file_chr]
-      rank = RANK_TO_INDEX[rank_chr]
-      [file, rank]
+      [position.getbyte(0) - 97, position.getbyte(1) - 49]
     end
 
     # @param coordinates [Array<Integer>] the coordinates of the square
