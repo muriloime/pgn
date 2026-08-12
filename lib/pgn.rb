@@ -5,6 +5,7 @@ require 'pgn/move'
 require 'pgn/move_calculator'
 require 'pgn/parser'
 require 'pgn/position'
+require 'pgn/serializer'
 require 'pgn/version'
 
 module PGN
