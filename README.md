@@ -100,6 +100,31 @@ _ _ _ ♙ _ _ _ _
 => r1bk3r/p2pBpNp/n4n2/1p1NP2P/6P1/3P4/P1P1K3/q5b1 b - - 1 22
 ```
 
+## Benchmarks
+
+A reproducible profiling harness lives in `bench/`. It measures the
+allocation and throughput cost of the hot paths (move application, board
+copying, parsing), so efficiency changes can be proven with a before/after
+diff of committed baselines.
+
+Run the full suite (writes/updates the committed baseline files):
+
+```
+bundle exec rake bench
+```
+
+Individual profiles:
+
+```
+bundle exec rake bench:moves  # move/board profiling only
+bundle exec rake bench:parse  # parse profiling only
+```
+
+`bench/baseline_moves.txt` and `bench/baseline_parse.txt` are committed
+snapshots of the current implementation. After an optimization, re-run
+`rake bench` and `git diff` the baseline files: allocation counts/bytes
+should drop, ips numbers should rise.
+
 ## Installation
 
 Add this line to your application's Gemfile:
