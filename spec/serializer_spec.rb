@@ -68,5 +68,22 @@ describe PGN::Serializer do
                 "2... Nf6 *\n"
       expect(PGN::Serializer.new(game).to_s).to eq(expected)
     end
+
+    it 'emits a game comment as the first movetext token' do
+      game = PGN::Game.new([], nil, '*', nil, 'game comment')
+      expect(PGN::Serializer.new(game).to_s).to eq("[Result \"*\"]\n\n{ game comment } *\n")
+    end
+
+    it 'numbers the first move 1... when starting from a FEN with black to move' do
+      fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1'
+      game = PGN::Game.new(%w[e5], { 'FEN' => fen }, '*')
+      expected = "[FEN \"#{fen}\"]\n\n1... e5 *\n"
+      expect(PGN::Serializer.new(game).to_s).to eq(expected)
+    end
+
+    it 'serializes -- moves verbatim and alternates color/fullmove' do
+      game = PGN::Game.new(%w[-- e4])
+      expect(PGN::Serializer.new(game).to_s).to eq("[Result \"*\"]\n\n1. -- e4 *\n")
+    end
   end
 end
