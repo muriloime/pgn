@@ -95,9 +95,13 @@ module PGN
       match = move.match(SAN_REGEX)
       return  if match.nil?
 
-      match.names.each do |name|
-        send("#{name}=", match[name]) if respond_to?(name)
-      end
+      self.piece          = match[:piece]
+      self.destination    = match[:destination]
+      self.promotion      = match[:promotion]
+      self.check          = match[:check]
+      self.capture        = match[:capture]
+      self.disambiguation = match[:disambiguation]
+      self.castle         = match[:castle]
     end
 
     def piece=(val)
