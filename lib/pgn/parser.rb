@@ -18,8 +18,8 @@ module PGN
       attr_accessor :backend
     end
 
-    # Default backend is the legacy whittle parser.
-    self.backend = PGN::WhittleParser
+    # Default backend is the stdlib Racc + StringScanner parser.
+    self.backend = PGN::PgnParser
 
     # @param input [String] the raw PGN text (already force-encoded by the
     #   caller, e.g. via {PGN.parse}).
