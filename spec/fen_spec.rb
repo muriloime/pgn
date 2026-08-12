@@ -97,4 +97,29 @@ describe PGN::FEN do
       fen.inspect.should be_a(String)
     end
   end
+
+  describe "board_string round-trip" do
+    fens = [
+      PGN::FEN::INITIAL,
+      "r1bqkb1r/pp1p1ppp/2n1pn2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 3 6",
+      "8/8/8/8/8/8/8/8 w - - 0 1",
+      "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+      "4k3/4P3/8/8/8/8/8/4K3 w - - 0 1",
+      "rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3",
+    ]
+
+    it "round-trips every fixture through FEN#to_s" do
+      fens.each do |fen|
+        expect(PGN::FEN.new(fen).to_s).to eq(fen), fen
+      end
+    end
+
+    it "round-trips the board portion through FEN#to_position.to_fen" do
+      fens.each do |fen|
+        original  = PGN::FEN.new(fen)
+        roundtrip = original.to_position.to_fen
+        expect(roundtrip.board_string).to eq(original.board_string), fen
+      end
+    end
+  end
 end

@@ -98,14 +98,22 @@ module PGN
     #   PGN::FEN.start.board_string #=> "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
     #
     def board_string
-      self.board
-          .squares
-          .transpose
-          .reverse
-          .map {|row| row.map {|e| e.nil? ? "_" : e } }
-          .map {|row| row.join }
-          .join("/")
-          .gsub(/_+/) {|match| match.length }
+      rows = self.board.squares.transpose.reverse
+      rows.map do |row|
+        s = +""
+        run = 0
+        row.each do |e|
+          if e.nil?
+            run += 1
+          else
+            s << run.to_s if run > 0
+            run = 0
+            s << e
+          end
+        end
+        s << run.to_s if run > 0
+        s
+      end.join("/")
     end
 
     # @return [PGN::Position] a {PGN::Position} representing the current
