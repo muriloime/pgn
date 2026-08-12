@@ -316,14 +316,13 @@ end
     def king_position
       king = move.white? ? 'K' : 'k'
 
-      coords = nil
       0.upto(7) do |file|
         0.upto(7) do |rank|
-          coords = [file, rank] if board.at(file, rank) == king
+          return [file, rank] if board.at(file, rank) == king
         end
       end
 
-      coords
+      nil
     end
 
     def valid_square?(file, rank)
