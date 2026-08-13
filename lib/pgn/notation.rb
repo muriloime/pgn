@@ -230,9 +230,9 @@ module PGN
 
       case piece.upcase
       when 'N'
-        KNIGHT_OFFS.any? { |o| (from_idx + o) == to_idx }
+        Board::KNIGHT_ATTACKS[from_idx].include?(to_idx)
       when 'K'
-        KING_OFFS.any? { |o| (from_idx + o) == to_idx }
+        Board::KING_ATTACKS[from_idx].include?(to_idx)
       when 'B', 'R', 'Q'
         slider_reaches?(piece.upcase, from_idx, to_idx)
       else
@@ -307,18 +307,12 @@ module PGN
 
     def knight_attacked?(board, target, color)
       knight = color == 'w' ? 'N' : 'n'
-      KNIGHT_OFFS.any? do |off|
-        i = target + off
-        (i & 0x88).zero? && board.at_index(i) == knight
-      end
+      Board::KNIGHT_ATTACKS[target].any? { |i| board.at_index(i) == knight }
     end
 
     def king_attacked?(board, target, color)
       king = color == 'w' ? 'K' : 'k'
-      KING_OFFS.any? do |off|
-        i = target + off
-        (i & 0x88).zero? && board.at_index(i) == king
-      end
+      Board::KING_ATTACKS[target].any? { |i| board.at_index(i) == king }
     end
 
     def slider_attacked?(board, target, color)
@@ -370,8 +364,8 @@ module PGN
     def move_from?(board, idx, piece, color, ep_idx)
       up = piece.upcase
       case up
-      when 'N' then leaper_moves?(board, idx, piece, color, KNIGHT_OFFS)
-      when 'K' then leaper_moves?(board, idx, piece, color, KING_OFFS)
+      when 'N' then leaper_moves?(board, idx, piece, color, Board::KNIGHT_ATTACKS[idx])
+      when 'K' then leaper_moves?(board, idx, piece, color, Board::KING_ATTACKS[idx])
       when 'B', 'R', 'Q'
         slider_moves?(board, idx, piece, color, slider_dirs(up))
       when 'P'
@@ -381,10 +375,9 @@ module PGN
       end
     end
 
-    def leaper_moves?(board, idx, piece, color, offs)
-      offs.any? do |off|
-        t = idx + off
-        (t & 0x88).zero? && landable?(board, t, color) && safe?(board, idx, t, piece, nil)
+    def leaper_moves?(board, idx, piece, color, targets)
+      targets.any? do |t|
+        landable?(board, t, color) && safe?(board, idx, t, piece, nil)
       end
     end
 

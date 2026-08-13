@@ -22,6 +22,11 @@ describe PGN::Notation do
                                'g1', 'f3')).to eq('Nf3')
     end
 
+    it 'generates a non-castling king walk' do
+      fen = '4k3/8/8/8/8/8/8/4K3 w - - 0 1'
+      expect(PGN::Notation.san(pos(fen), 'e1', 'e2')).to eq('Ke2')
+    end
+
     it 'generates a pawn capture with the origin file' do
       fen = 'rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2'
       expect(PGN::Notation.san(pos(fen), 'e4', 'd5')).to eq('exd5')
