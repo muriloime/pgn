@@ -122,6 +122,29 @@ _ _ _ ♙ _ _ _ _
 => r1bk3r/p2pBpNp/n4n2/1p1NP2P/6P1/3P4/P1P1K3/q5b1 b - - 1 22
 ```
 
+### Generating SAN from coordinates
+
+{PGN::Notation} is the reverse of {PGN::Move}: it *builds* Standard
+Algebraic Notation for a coordinate move (origin square, destination square,
+optional promotion) given the position before the move. Use it to render
+moves stored as coordinates in standard chess notation.
+
+```
+> PGN::Notation.san(PGN::Position.start, "g1", "f3")
+=> "Nf3"
+
+> PGN::Notation.san_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "e2", "e4")
+=> "e4"
+
+> fen = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
+> PGN::Notation.san_from_fen(fen, "e1", "g1")
+=> "O-O"
+```
+
+It handles captures, en passant, promotions, legal-move disambiguation
+(file / rank / full square, respecting pins), and check (`+`) / checkmate
+(`#`) suffixes.
+
 ## Benchmarks
 
 A reproducible profiling harness lives in `bench/`. It measures the

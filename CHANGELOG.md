@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.4.0 (unreleased)
+
+### Summary
+
+New `PGN::Notation` module that *generates* Standard Algebraic Notation
+(SAN) for a single coordinate move (origin square, destination square,
+optional promotion) given the position before the move. The rest of the
+gem only *parses* SAN; this is the reverse direction, needed to render
+moves stored as coordinates (e.g. `e2`-`e4`) in standard chess notation.
+
+### Added
+- `PGN::Notation.san(position, from, to, promotion = nil)` and the
+  convenience `PGN::Notation.san_from_fen(fen, from, to, promotion = nil)`.
+  Builds full SAN: piece letter, capture (`x`), castling (`O-O`/`O-O-O`),
+  pawn capture file (`exd5`), promotion (`=Q`), legal-move disambiguation
+  (file / rank / full square, respecting pins), and check (`+`) / checkmate
+  (`#`) suffixes. Checkmate detection drives full legal-move generation for
+  the side to move (the gem's first move generator). Raise `ArgumentError`
+  if the origin square is empty.
+- New `spec/notation_spec.rb`; all 201 specs green. A round-trip harness over
+  every parseable fixture reproduces the original SAN of all 277 moves
+  exactly (including disambiguation and `+`/`#` suffixes).
+
 ## 1.3.0 (2026-08-13)
 
 ### Summary
