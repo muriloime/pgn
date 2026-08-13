@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.2.1 (2026-08-13)
+
+### Summary
+
+Replay (move-application) throughput quick win on the `MoveCalculator`
+hot path. No public API changes; serialized PGN/FEN output stays
+byte-identical. See `bench/IMPROVEMENTS.md` for the per-step deltas.
+
+### Changed
+- **`MoveCalculator#valid_square?`**: integer compares (`file >= 0 &&
+  file < 8`) instead of `(0..7).include?(file)`, which both allocates a
+  `Range` per call and is ~3.4x slower. This predicate sits inside the
+  `first_piece` / `move_origins` / `king_position` inner board-scanning
+  loops — the dominant replay compute site (~46% of replay CPU via
+  per-method timing, not the SAN regex parse as had been assumed).
+- **`MoveCalculator#compute_origin`**: string `case` (`when 'B','R','Q',...`)
+  instead of `/[brq]/i` regex `===` matches, removing 4 `MatchData`
+  allocations per move.
+- **`MoveCalculator#first_piece`**: returns only the `[file, rank]` square
+  (`nil` when the scan runs off the edge) instead of a `[piece, square]`
+  wrapper tuple; callers read the piece via a new `piece_at` helper. Removes
+  one array allocation per direction scan.
+- Performance vs 1.2.0 (immortal game, 45 plies, fresh process each):
+  replay throughput 814.65 us/i -> 752.54 us/i (+8.2%); replay allocations
+  1709 -> 1571 objects (-138, -8.1%) and 103720 -> 92440 bytes (-10.9%).
+  182 specs pass; byte-identical FEN/PGN output; zero new rubocop offenses
+  vs 1.2.0. The piece-location-index rewrite (the real ~46% ceiling,
+  deferred "Approach B") is unchanged.
+
 ## 1.2.0 (2026-08-13)
 
 ### Summary
