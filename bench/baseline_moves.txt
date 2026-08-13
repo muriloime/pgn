@@ -15,9 +15,9 @@ total_allocated bytes:   0
 === 4. Replay throughput (ips, excluding parse) ===
 ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
 Warming up --------------------------------------
-     replay immortal   177.000 i/100ms
+     replay immortal   167.000 i/100ms
 Calculating -------------------------------------
-     replay immortal      1.794k (± 1.8%) i/s  (557.31 μs/i) -      9.027k in   5.030869s
+     replay immortal      1.726k (± 2.4%) i/s  (579.22 μs/i) -      8.684k in   5.029910s
 
 === 5. FEN generation x46 (target of direct-0x88 FEN) ===
 total_allocated objects: 1913
@@ -26,9 +26,9 @@ total_allocated bytes:   100464
 === 6. FEN throughput (ips) ===
 ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
 Warming up --------------------------------------
-        fen immortal   133.000 i/100ms
+        fen immortal   129.000 i/100ms
 Calculating -------------------------------------
-        fen immortal      1.335k (± 1.0%) i/s  (749.09 μs/i) -      6.783k in   5.081104s
+        fen immortal      1.302k (± 3.4%) i/s  (767.90 μs/i) -      6.579k in   5.052006s
 
 === 7. Last-position-only (45 plies): lazy vs eager ===
 lazy  total_allocated objects: 1063
