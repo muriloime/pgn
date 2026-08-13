@@ -1,5 +1,57 @@
 # Changelog
 
+## 1.3.0 (2026-08-13)
+
+### Summary
+
+Replay (move-application) board-representation rewrite: `PGN::Board`
+internals move to the classic 0x88 scheme (a 128-cell array indexed by
+`rank*16+file`) and `PGN::MoveCalculator` works entirely in single-integer
+square indices, so the replay hot path no longer allocates `[file,rank]`
+coordinate arrays or square-name strings. No public API changes; serialized
+PGN/FEN output stays byte-identical.
+
+### Changed
+- **`PGN::Board`**: internals rewritten to a 0x88 array (`@cells`, 128
+  entries). The public file-major `squares` 8x8 API, `at` (string/coord
+  overloads), `update`, `change!`, `position_for`, `coordinates_for`, and
+  `dup` are preserved (computed/translated at the API boundary, off the
+  hot path). New internal 0x88 accessors `index_of`, `index_for`, `at_index`,
+  `update_index`, and `apply!` (integer-keyed batch update) serve the hot
+  path. `dup` copies the 128-cell array (cheaper than the prior column COW:
+  136 → 91 objects / 10336 → 3856 bytes per 45 dupes).
+- **`PGN::MoveCalculator`**: rewritten to address squares as 0x88 integer
+  indices throughout. `#compute_origin` returns an index; `#changes` is an
+  integer-keyed hash applied via `Board#apply!`; ray stepping (`first_piece`)
+  and off-board checks use a single integer add and the `(idx & 0x88).zero?`
+  bitmask (≈1.6x faster than a 0..7 four-integer bounds check, measured);
+  `castling_restrictions`/`en_passant_*` use integer corner indices. The
+  public `#origin` reader still returns an algebraic square string. Scan and
+  disambiguation algorithms are unchanged, so output is byte-identical.
+- **Plan B (piece-location index) — attempted, rejected**: a `piece → 0x88
+  indices` index maintained in `update`/`apply!`, used for O(1)
+  slider/leaper/king origin lookups, was implemented on top of the 0x88
+  board and passed all 182 specs, but regressed: replay 526 → 727 µs/i
+  (+38% slower), allocations 976 → 1591 objects (+63%). `Board#dup` (called
+  every move) must clone the index (≈12 piece arrays: Board#dup 91 → 676
+  objects), and every move pays per-update index maintenance that pawns —
+  the most common move type, whose origins are geometry-fixed and can't use
+  the index — pay for no benefit. The index helps move-*generation*
+  libraries (chess.js, python-chess) that enumerate all legal moves, but
+  not replay, which validates one given move where ray-scanning from the
+  destination is already cheap. Reverted; the 0x88 board alone is the
+  winner. Rationale recorded in `TODO.md`.
+- Performance vs 1.2.1 (immortal game, 45 plies; A/B batched median, 200
+  replies × 7, fresh process each): replay throughput 798 → 535 µs/i
+  (+49%); replay allocations 1571 → 976 objects (−38%) and 92440 → 62064
+  bytes (−33%). Full pipeline (`bench/profile_parse.rb`, 500 games):
+  parse+replay throughput 659 → 534 ms/i (+23%), allocations 1101586 →
+  831530 objects (−24.5%) and 62164136 → 47966112 bytes (−22.8%);
+  parse-only unchanged. 182 specs pass; byte-identical FEN/PGN output;
+  zero new rubocop offenses vs 1.2.1 (the rewrite is shorter on
+  ClassLength/AbcSize and leaves the same pre-existing metric offenses on
+  the same methods).
+
 ## 1.2.1 (2026-08-13)
 
 ### Summary

@@ -1,12 +1,12 @@
 Workload: immortal game, 45 plies
 
 === 1. Replay allocations (45 plies, no parse) ===
-total_allocated objects: 1571
-total_allocated bytes:   92440
+total_allocated objects: 976
+total_allocated bytes:   62064
 
 === 2. Board#dup x45 (target of flat-board COW) ===
-total_allocated objects: 136
-total_allocated bytes:   10336
+total_allocated objects: 91
+total_allocated bytes:   3856
 
 === 3. Board#at(str) x1000 (target of coord-arithmetic at) ===
 total_allocated objects: 0
@@ -15,8 +15,8 @@ total_allocated bytes:   0
 === 4. Replay throughput (ips, excluding parse) ===
 ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
 Warming up --------------------------------------
-     replay immortal   120.000 i/100ms
+     replay immortal   193.000 i/100ms
 Calculating -------------------------------------
-     replay immortal      1.301k (± 2.9%) i/s  (768.67 μs/i) -      6.600k in   5.073207s
+     replay immortal      1.894k (± 2.9%) i/s  (528.02 μs/i) -      9.650k in   5.095389s
 
 Done. Compare this file against bench/baseline_moves.txt after optimizations.

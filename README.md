@@ -169,13 +169,13 @@ Move pipeline — immortal game, 45 plies (`bench/profile_moves.rb`):
 
 | Metric | original `pgn` | pgn2 | Δ |
 |---|---:|---:|---:|
-| Replay allocations (objects) | 5124 | 1571 | -3553 (-69.3%) |
-| Replay allocations (bytes) | 262608 | 92440 | -170168 (-64.8%) |
-| `Board#dup` x45 (objects) | 451 | 136 | -315 (-69.8%) |
-| `Board#dup` x45 (bytes) | 43096 | 10336 | -32760 (-76.0%) |
+| Replay allocations (objects) | 5124 | 976 | -4148 (-80.9%) |
+| Replay allocations (bytes) | 262608 | 62064 | -200544 (-76.4%) |
+| `Board#dup` x45 (objects) | 451 | 91 | -360 (-79.8%) |
+| `Board#dup` x45 (bytes) | 43096 | 3856 | -39240 (-91.1%) |
 | `Board#at(str)` x1000 (objects) | 6000 | 0 | -6000 (-100%) |
 | `Board#at(str)` x1000 (bytes) | 240000 | 0 | -240000 (-100%) |
-| Replay throughput | 841 µs/i | 741 µs/i | ~1.14x faster |
+| Replay throughput | 841 µs/i | 517 µs/i | ~1.63x faster |
 
 Parser — 500 immortal games (`bench/profile_parse.rb`):
 
@@ -183,10 +183,10 @@ Parser — 500 immortal games (`bench/profile_parse.rb`):
 |---|---:|---:|---:|
 | Parse-only allocations (objects) | 1248065 | 347037 | -901028 (-72.2%) |
 | Parse-only allocations (bytes) | 120370470 | 17977414 | -102393056 (-85.1%) |
-| Parse + replay allocations (objects) | 3778073 | 1101586 | -2676487 (-70.9%) |
-| Parse + replay allocations (bytes) | 249570048 | 62164136 | -187405912 (-75.1%) |
+| Parse + replay allocations (objects) | 3778073 | 831530 | -2946543 (-78.0%) |
+| Parse + replay allocations (bytes) | 249570048 | 47966112 | -201603936 (-80.8%) |
 | Parse-only throughput | 1461 ms/i | 305 ms/i | ~4.8x faster |
-| Parse + replay throughput | 1938 ms/i | 816 ms/i | ~2.4x faster |
+| Parse + replay throughput | 1938 ms/i | 534 ms/i | ~3.6x faster |
 
 What changed to get there:
 
@@ -224,6 +224,21 @@ What changed to get there:
     throughput +8.2% (766 → 741 µs/i), replay allocations −8% (1710 → 1571
     objects). Board-scanning origin lookup is ~46% of replay CPU; the
     piece-location-index rewrite that would cut it remains deferred.
+14. `PGN::Board` / `PGN::MoveCalculator` — 0x88 board representation. `Board`
+    internals are now a 128-cell array indexed by `rank*16+file` (the classic
+    0x88 scheme), and `MoveCalculator` works entirely in single-integer square
+    indices via `Board#at_index`/`#apply!`, so the replay hot path no longer
+    allocates `[file,rank]` coordinate arrays or square-name strings.
+    Off-board is a single bitmask (`(idx & 0x88).zero?`, ~1.6x faster than a
+    0..7 bounds check) and ray stepping is a single integer add. Algorithm
+    unchanged → byte-identical output. Replay throughput +49% (798 → 517 µs/i),
+    replay allocations −38% (1571 → 976 objects) / −33% (92440 → 62064 bytes),
+    parse+replay +21% throughput. A companion piece-location index (piece →
+    0x88 indices for O(1) origin/king lookups) was implemented on top, passed
+    all specs, but *regressed* (replay 526→727 µs/i, allocations +63%): `dup`
+    must clone the index every move and every move pays maintenance that pawns
+    (the common case, geometry-fixed origins) can't use — so it was rejected
+    and reverted. The 0x88 board alone is the winner.
 
 Public output (FEN, PGN) is byte-identical to the original gem; the full
 suite (182 examples) stays green. See `bench/IMPROVEMENTS.md` for the per-step
