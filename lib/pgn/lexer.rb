@@ -161,7 +161,6 @@ module PGN
     def initialize(input)
       @input = input
       @ss = StringScanner.new(input)
-      @line = 1
       @game_starts = []
       @between_games = true # at start we are "between" games
     end
@@ -182,7 +181,8 @@ module PGN
       type, value = next_token_pair
       return nil unless type
 
-      Token.new(type: type, value: value, offset: @last_offset, line: @line)
+      Token.new(type: type, value: value, offset: @last_offset,
+                line: line_at(@last_offset))
     end
 
     # Fast path for the parser: returns [type, value] for the next
@@ -203,7 +203,6 @@ module PGN
         end
 
         value = scan_one
-        advance_line(value)
         next if @scan_discarded
 
         note_token(@scan_type, off)
@@ -231,7 +230,7 @@ module PGN
         return m
       end
       raise UnconsumedInputError,
-            "Unmatched input #{@input.byteslice(@ss.pos..).inspect} on line #{@line}"
+            "Unmatched input #{@input.byteslice(@ss.pos..).inspect} on line #{line_at(@ss.pos)}"
     end
 
     # Track per-game content-start offsets for verbatim pgn slicing.
@@ -246,8 +245,12 @@ module PGN
       end
     end
 
-    def advance_line(str)
-      @line += str.count("\n")
+    # Line number at a byte offset, computed lazily only for error messages
+    # and the spec `tokens` helper. Keeping a running `@line` on the parse hot
+    # path (one `str.count("\n")` per token) was ~6% of parse CPU for a value
+    # the parser never reads.
+    def line_at(off)
+      1 + @input.byteslice(0, off).count("\n")
     end
   end
 
