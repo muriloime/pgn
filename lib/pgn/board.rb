@@ -32,6 +32,31 @@ module PGN
     RANK_TO_INDEX = ('1'..'8').each_with_index.to_h
     INDEX_TO_RANK = RANK_TO_INDEX.invert
 
+    # 0x88 knight offsets (a1 + 33 = b3, etc.).
+    KNIGHT_OFFS = [33, 31, -31, -33, 18, 14, -14, -18].freeze
+    KING_OFFS = [-1, 1, -16, 16, -15, 15, -17, 17].freeze
+
+    # Precomputed on-board attack masks: entry `idx` is the frozen Array of
+    # on-board 0x88 target indices reachable from `idx` by that piece. Built
+    # once at load time so the per-call offset + off-board test is replaced by
+    # a direct array iteration.
+    KNIGHT_ATTACKS = Array.new(128) do |idx|
+      next nil if (idx & 0x88) != 0 # rubocop:disable Style/BitwisePredicate
+
+      KNIGHT_OFFS.each_with_object([]) do |off, a|
+        t = idx + off
+        a << t if (t & 0x88).zero? # rubocop:disable Style/BitwisePredicate
+      end.freeze
+    end.freeze
+    KING_ATTACKS = Array.new(128) do |idx|
+      next nil if (idx & 0x88) != 0 # rubocop:disable Style/BitwisePredicate
+
+      KING_OFFS.each_with_object([]) do |off, a|
+        t = idx + off
+        a << t if (t & 0x88).zero? # rubocop:disable Style/BitwisePredicate
+      end.freeze
+    end.freeze
+
     # algebraic to unicode piece lookup
     #
     UNICODE_PIECES = {

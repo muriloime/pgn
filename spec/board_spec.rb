@@ -7,6 +7,36 @@ describe PGN::Board do
     end
   end
 
+  describe 'attack masks' do
+    it 'KNIGHT_ATTACKS lists the on-board knight targets for each 0x88 index' do
+      expect(PGN::Board::KNIGHT_ATTACKS[0]).to contain_exactly(18, 33) # a1: c3(0x12), b3(0x21)
+      expect(PGN::Board::KNIGHT_ATTACKS[0x54].length).to eq(8) # e4 = 0x54, centre
+      expect(PGN::Board::KNIGHT_ATTACKS[0x77]).to contain_exactly(86, 101) # h8: f7(0x56), g6(0x65)
+    end
+
+    it 'KING_ATTACKS lists the on-board king targets for each 0x88 index' do
+      expect(PGN::Board::KING_ATTACKS[0]).to contain_exactly(1, 16, 17) # a1: b1, a2, b2
+      expect(PGN::Board::KING_ATTACKS[0x54].length).to eq(8)
+      expect(PGN::Board::KING_ATTACKS[0x77]).to contain_exactly(102, 103, 118) # h8: g7, h7, g8
+    end
+
+    it 'only contains on-board squares and is nil for off-board source indices' do
+      on_board = (0...128).select { |i| (i & 0x88).zero? }
+      expect(PGN::Board::KNIGHT_ATTACKS.length).to eq(128)
+      expect(PGN::Board::KING_ATTACKS.length).to eq(128)
+      on_board.each do |i|
+        expect(PGN::Board::KNIGHT_ATTACKS[i]).to be_an(Array)
+        expect(PGN::Board::KING_ATTACKS[i]).to be_an(Array)
+        expect(PGN::Board::KNIGHT_ATTACKS[i]).to all(satisfy { |sq| (sq & 0x88).zero? })
+        expect(PGN::Board::KING_ATTACKS[i]).to all(satisfy { |sq| (sq & 0x88).zero? })
+      end
+      (0...128).reject { |i| (i & 0x88).zero? }.each do |i|
+        expect(PGN::Board::KNIGHT_ATTACKS[i]).to be_nil
+        expect(PGN::Board::KING_ATTACKS[i]).to be_nil
+      end
+    end
+  end
+
   describe '#at' do
     # Use .dup because PGN::Board.start returns the same shared board
     # backed by the frozen START constant.
