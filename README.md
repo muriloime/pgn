@@ -156,9 +156,14 @@ snapshots captured before any hot-path work — at that point pgn2's parser
 were byte-for-byte the original gem's code. The "pgn2" figures are the
 current committed baselines (stdlib `Racc` + `StringScanner` parser,
 column-level copy-on-write `Board`, getbyte-arithmetic `at`). All numbers
-are from the same machine (Ruby 4.0.5, x86_64-linux); allocation counts are
-deterministic, throughput is over a 5 s window so treat ms/i as the stable
-signal (ips is noisy).
+are from the same machine (Ruby 4.0.5, x86_64-linux). **Allocation counts
+are deterministic** and the headline signal. **Throughput is reported as the
+median of N back-to-back wall-clock runs** (whittle-era commit `1360bfc` vs
+current `main`): the `benchmark-ips` harness has ±30–60% per-run variance, so
+its single-run `ms/i` is not reliable across versions — e.g. the Racc baseline
+once recorded 371 ms/i (±37%) for parse+replay but the same commit measures
+~1017 ms reproduced today. `bench/baseline_*.txt` remains the harness of
+record for allocations.
 
 Move pipeline — immortal game, 45 plies (`bench/profile_moves.rb`):
 
@@ -170,7 +175,7 @@ Move pipeline — immortal game, 45 plies (`bench/profile_moves.rb`):
 | `Board#dup` x45 (bytes) | 43096 | 10336 | -32760 (-76.0%) |
 | `Board#at(str)` x1000 (objects) | 6000 | 0 | -6000 (-100%) |
 | `Board#at(str)` x1000 (bytes) | 240000 | 0 | -240000 (-100%) |
-| Replay throughput | 1.132k ips (884 µs/i) | 1.178k ips (849 µs/i) | ~1.04x faster |
+| Replay throughput | 841 µs/i | 766 µs/i | ~1.10x faster |
 
 Parser — 500 immortal games (`bench/profile_parse.rb`):
 
@@ -180,8 +185,8 @@ Parser — 500 immortal games (`bench/profile_parse.rb`):
 | Parse-only allocations (bytes) | 120370470 | 28257414 | -92113056 (-76.5%) |
 | Parse + replay allocations (objects) | 3778073 | 1427586 | -2350487 (-62.2%) |
 | Parse + replay allocations (bytes) | 249570048 | 78104136 | -171465912 (-68.7%) |
-| Parse-only throughput | 1.513 ips (661 ms/i) | 3.649 ips (274 ms/i) | ~2.4x faster |
-| Parse + replay throughput | 0.933 ips (1070 ms/i) | 1.399 ips (715 ms/i) | ~1.5x faster |
+| Parse-only throughput | 1461 ms/i | 327 ms/i | ~4.5x faster |
+| Parse + replay throughput | 1938 ms/i | 826 ms/i | ~2.35x faster |
 
 What changed to get there:
 
