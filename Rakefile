@@ -1,5 +1,12 @@
 require 'bundler/gem_tasks'
+require 'rake/extensiontask'
 require 'rubocop/rake_task'
+
+spec = Gem::Specification.load('pgn2.gemspec')
+Rake::ExtensionTask.new('pgn2_native', spec) do |ext|
+  ext.ext_dir = 'ext/pgn2_native'
+  ext.lib_dir = 'lib/pgn2_native'
+end
 
 RuboCop::RakeTask.new
 

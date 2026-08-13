@@ -1,0 +1,3 @@
+[workspace]
+members = ["pgn2-bitboard", "pgn2_native"]
+resolver = "2"

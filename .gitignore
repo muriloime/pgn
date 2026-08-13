@@ -20,3 +20,5 @@ tmp
 tags
 *.output
 .worktrees/
+ext/pgn2_native/target
+lib/pgn2_native
