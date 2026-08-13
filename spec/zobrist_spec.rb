@@ -4,13 +4,13 @@ require 'spec_helper'
 
 describe PGN::Zobrist do
   it 'exposes table, side, castling, and ep_file constants' do
-    expect(PGN::Zobrist.table).to be_a(Hash)
-    expect(PGN::Zobrist.table.keys.sort).to eq(%w[B K N P Q R b k n p q r].sort)
-    expect(PGN::Zobrist.table['P'].length).to eq(128)
-    expect(PGN::Zobrist.side).to be_an(Integer)
-    expect(PGN::Zobrist.castling).to be_a(Hash)
-    expect(PGN::Zobrist.castling.keys.sort).to eq(%w[K Q k q].sort)
-    expect(PGN::Zobrist.ep_file.length).to eq(8)
+    expect(PGN::Zobrist::TABLE).to be_a(Hash)
+    expect(PGN::Zobrist::TABLE.keys.sort).to eq(%w[B K N P Q R b k n p q r].sort)
+    expect(PGN::Zobrist::TABLE['P'].length).to eq(128)
+    expect(PGN::Zobrist::SIDE).to be_an(Integer)
+    expect(PGN::Zobrist::CASTLING).to be_a(Hash)
+    expect(PGN::Zobrist::CASTLING.keys.sort).to eq(%w[K Q k q].sort)
+    expect(PGN::Zobrist::EP_FILE.length).to eq(8)
   end
 
   it 'seeds the starting position to a stable integer' do
@@ -39,8 +39,8 @@ describe PGN::Zobrist do
   end
 
   it 'is deterministic across processes (frozen constants)' do
-    expect(PGN::Zobrist.table).to be_frozen
-    expect(PGN::Zobrist.castling).to be_frozen
-    expect(PGN::Zobrist.ep_file).to be_frozen
+    expect(PGN::Zobrist::TABLE).to be_frozen
+    expect(PGN::Zobrist::CASTLING).to be_frozen
+    expect(PGN::Zobrist::EP_FILE).to be_frozen
   end
 end

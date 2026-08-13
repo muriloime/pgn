@@ -291,6 +291,18 @@ module PGN
       rows.join('/')
     end
 
+    # Boards are equal when every cell holds the same piece (or is
+    # empty), including off-board padding, which is always nil on both.
+    def eql?(other)
+      other.is_a?(Board) && cells == other.cells
+    end
+
+    alias == eql?
+
+    protected
+
+    attr_reader :cells
+
     private
 
     def file_of(square)

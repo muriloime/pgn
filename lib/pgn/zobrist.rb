@@ -24,31 +24,11 @@ module PGN
 
     PIECES = %w[P N B R Q K p n b r q k].freeze
 
-    table = {}
-    PIECES.each do |piece|
-      table[piece] = Array.new(128) { rand64 }
-    end
-    TABLE = table.freeze
+    TABLE = PIECES.to_h { |piece| [piece, Array.new(128) { rand64 }] }.freeze
 
     SIDE = rand64
     CASTLING = { 'K' => rand64, 'Q' => rand64, 'k' => rand64, 'q' => rand64 }.freeze
     EP_FILE = Array.new(8) { rand64 }.freeze
-
-    def self.table
-      TABLE
-    end
-
-    def self.side
-      SIDE
-    end
-
-    def self.castling
-      CASTLING
-    end
-
-    def self.ep_file
-      EP_FILE
-    end
 
     # @param board [PGN::Board]
     # @param player [Symbol] :white or :black
@@ -59,14 +39,14 @@ module PGN
       h = 0
       0.upto(7) do |rank|
         0.upto(7) do |file|
-          idx = (rank * 16) + file
+          idx = board.index_for(file, rank)
           piece = board.at_index(idx)
           h ^= TABLE[piece][idx] if piece
         end
       end
       h ^= SIDE if player == :black
       castling.to_a.each { |right| h ^= CASTLING[right] if CASTLING.key?(right) }
-      h ^= EP_FILE[en_passant.getbyte(0) - 97] if en_passant && !en_passant.empty?
+      h ^= EP_FILE[Board::FILE_TO_INDEX[en_passant[0]]] if en_passant && !en_passant.empty?
       h
     end
   end

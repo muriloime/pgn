@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module PGN
   # {PGN::Position} encapsulates all of the information necessary to
   # completely understand a chess position. It can be turned into a FEN string
@@ -99,7 +101,7 @@ module PGN
     end
 
     def inspect
-      "\n" + board.inspect
+      "\n#{board.inspect}"
     end
 
     # @return [PGN::FEN] a {PGN::FEN} object representing the current position
@@ -108,7 +110,7 @@ module PGN
       PGN::FEN.from_attributes(
         board: board,
         active: player == :white ? 'w' : 'b',
-        castling: castling.join(''),
+        castling: castling.join,
         en_passant: en_passant,
         halfmove: halfmove.to_s,
         fullmove: fullmove.to_s
@@ -123,7 +125,8 @@ module PGN
         player == other.player &&
         castling == other.castling &&
         en_passant == other.en_passant &&
-        board_equal?(other.board)
+        zobrist == other.zobrist &&
+        board == other.board
     end
 
     alias == eql?
@@ -139,12 +142,6 @@ module PGN
     # @return [Integer]
     def zobrist
       @zobrist ||= Zobrist.seed(board, player, castling, en_passant)
-    end
-
-    private
-
-    def board_equal?(other_board)
-      0.upto(127).all? { |idx| board.at_index(idx) == other_board.at_index(idx) }
     end
   end
 end
