@@ -192,8 +192,8 @@ Move pipeline — immortal game, 45 plies (`bench/profile_moves.rb`):
 
 | Metric | original `pgn` | pgn2 | Δ |
 |---|---:|---:|---:|
-| Replay allocations (objects) | 5124 | 976 | -4148 (-80.9%) |
-| Replay allocations (bytes) | 262608 | 62064 | -200544 (-76.4%) |
+| Replay allocations (objects) | 5124 | 931 | -4193 (-81.8%) |
+| Replay allocations (bytes) | 262608 | 66728 | -195880 (-74.6%) |
 | `Board#dup` x45 (objects) | 451 | 91 | -360 (-79.8%) |
 | `Board#dup` x45 (bytes) | 43096 | 3856 | -39240 (-91.1%) |
 | `Board#at(str)` x1000 (objects) | 6000 | 0 | -6000 (-100%) |
@@ -206,8 +206,8 @@ Parser — 500 immortal games (`bench/profile_parse.rb`):
 |---|---:|---:|---:|
 | Parse-only allocations (objects) | 1248065 | 288537 | -959528 (-76.9%) |
 | Parse-only allocations (bytes) | 120370470 | 15640374 | -104730096 (-87.0%) |
-| Parse + replay allocations (objects) | 3778073 | 773530 | -3004543 (-79.5%) |
-| Parse + replay allocations (bytes) | 249570048 | 45706128 | -203863920 (-81.7%) |
+| Parse + replay allocations (objects) | 3778073 | 751030 | -3027043 (-80.1%) |
+| Parse + replay allocations (bytes) | 249570048 | 44812592 | -204757456 (-82.0%) |
 | Parse-only throughput | 1461 ms/i | 203 ms/i | ~7.2x faster |
 | Parse + replay throughput | 1938 ms/i | 484 ms/i | ~4.0x faster |
 
@@ -290,10 +290,24 @@ What changed to get there:
     an incremental per-move update was prototyped and rejected because 64-bit
     Integer XOR allocates a `Bignum` per operation (~9/move), regressing
     replay +40% allocations / −32% throughput for a feature nothing
-    currently consumes. Replay stays at 976 objects / 62064 bytes.
+    currently consumes. Replay stayed at 976 objects / 62064 bytes at that
+    pass (since refreshed by #18).
+18. `PGN::Board::KNIGHT_ATTACKS` / `KING_ATTACKS` — precomputed 128-entry
+    on-board target tables (frozen), built once at load from the existing
+    knight/king offsets. `PGN::Notation` (`#reaches?`, `#knight_attacked?`,
+    `#king_attacked?`, `#leaper_moves?`) and `PGN::MoveCalculator`
+    (`#leaper_origins`) iterate the masks instead of the per-call
+    `offsets.any? { from + off == to }` + `(t & 0x88).zero?` off-board test.
+    Same-harness A/B (pre-mask lib vs masks): SAN generation throughput
+    +8% (334 → 361 ips / 2.99 → 2.77 ms/i), allocations unchanged (1387
+    objects); replay neutral (930 → 931 objects, throughput within noise).
+    New `bench/baseline_moves.txt` sections 8 (SAN gen) and 9 (retained
+    memory: lazy `each_position` 95 objects vs eager `positions` 287 objects
+    when the `Game` is kept alive — ~3x less retained for streaming).
+    Output byte-identical.
 
 Public output (FEN, PGN) is byte-identical to the original gem; the full
-suite (222 examples) stays green. See `bench/IMPROVEMENTS.md` for the per-step
+suite (226 examples) stays green. See `bench/IMPROVEMENTS.md` for the per-step
 before/after deltas that produced these tables.
 
 ## Installation

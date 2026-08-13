@@ -4,6 +4,45 @@
 
 ### Summary
 
+Attack-mask pass: precomputed knight/king on-board target tables on
+`PGN::Board`, used by `Notation` (reaches/attacked/leaper moves) and
+`MoveCalculator` (knight/king origin lookup), plus a retained-memory
+benchmark section. No behavior change; serialized PGN/FEN stays
+byte-identical; all 226 specs green.
+
+### Changed
+- **`PGN::Board::KNIGHT_ATTACKS` / `KING_ATTACKS`**: new frozen 128-entry
+  tables mapping each 0x88 index to the frozen Array of on-board target
+  indices reachable by that piece (built once at load from the existing
+  offsets). Replaces the per-call `OFFS.any? { |o| from + o == to }` +
+  `(t & 0x88).zero?` off-board test with a direct array iteration.
+- **`PGN::Notation`**: `#reaches?` (N/K), `#knight_attacked?`,
+  `#king_attacked?`, and `#leaper_moves?` now iterate the precomputed masks
+  instead of offsets. `leaper_moves?` takes targets directly (no per-call
+  off-board test).
+- **`PGN::MoveCalculator`**: K/N origin lookup routes through a new
+  `leaper_origins` using `Board::KNIGHT_ATTACKS`/`KING_ATTACKS`; the pawn
+  path keeps the offset-based `move_origins`.
+- **Bench** (`bench/profile_moves.rb`): new section 8 (SAN generation
+  allocation + throughput) and section 9 (retained memory: lazy
+  `each_position` vs eager `positions`). Baselines refreshed.
+
+### Performance
+- **SAN generation** (`Notation.san` over the immortal game): throughput
+  **+8%** (334 → 361 ips, 2.99 → 2.77 ms/i) from a same-harness A/B
+  (pre-mask lib vs masks). Allocations unchanged (1387 objects) — the masks
+  only replace arithmetic + an off-board test, no new objects per move.
+- **Replay**: neutral. Same-harness A/B: 930 → 931 objects / +6720 bytes
+  with masks; throughput within noise. (The committed replay baseline
+  refreshed 976 → 931 objects, which is measurement-environment variance
+  between runs of identical pre-mask code, not an effect of the masks.)
+- **Retention** (new section 9): a caller that streams `each_position` and
+  keeps the `Game` retains 95 objects / 6280 bytes; a caller that calls
+  `positions` (memoizing the full array on the Game) retains 287 objects /
+  17232 bytes — ~3x less retained for the streaming pattern.
+
+## 1.5.0 (2026-08-13)
+
 Performance/internals pass: a direct 0x88 FEN builder, a lazy
 `Game#each_position` enumerator, and a lazily-computed Zobrist position
 hash with `Position#hash`/`#eql?`/`#==`. No public behavior change;
