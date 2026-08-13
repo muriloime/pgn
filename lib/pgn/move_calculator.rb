@@ -185,9 +185,9 @@ module PGN
       return nil if move.castle
 
       possibilities = case move.piece
-                      when /[brq]/i then direction_origins
-                      when /[kn]/i  then move_origins
-                      when /p/i     then pawn_origins
+                      when 'B', 'R', 'Q', 'b', 'r', 'q' then direction_origins
+                      when 'K', 'N', 'k', 'n' then move_origins
+                      when 'P', 'p' then pawn_origins
                       else # don't care move, used in variations
                         return nil
                       end
@@ -207,8 +207,8 @@ module PGN
       possibilities = []
 
       directions.each do |dir|
-        piece, square = first_piece(destination_coords, dir)
-        possibilities << square if piece == move.piece
+        square = first_piece(destination_coords, dir)
+        possibilities << square if piece_at(square) == move.piece
       end
 
       possibilities
@@ -285,28 +285,44 @@ module PGN
         attacking_piece = attacking_piece.upcase if move.black?
 
         directions.each do |dir|
-          piece, square = first_piece(king_pos, dir)
-          next unless piece == move.piece && possibilities.include?(square)
+          square = first_piece(king_pos, dir)
+          next unless piece_at(square) == move.piece && possibilities.include?(square)
 
-          piece, = first_piece(square, dir)
-          possibilities.reject! { |p| p == square } if piece == attacking_piece
+          next_square = first_piece(square, dir)
+          possibilities.reject! { |p| p == square } if piece_at(next_square) == attacking_piece
         end
       end
 
       possibilities
     end
 
+    # Walks from `from` in `direction` until it reaches the edge of the board
+    # or the first occupied square. Returns that square's `[file, rank]`
+    # coordinates, or `nil` if no piece was encountered before the edge. The
+    # caller reads the piece off the board itself, so this avoids allocating
+    # the `[piece, square]` wrapper tuple per direction scan.
+    #
     def first_piece(from, direction)
       file, rank = from
       i,    j    = direction
 
-      piece = nil
+      loop do
+        file += i
+        rank += j
+        return nil if file.negative? || file > 7 || rank.negative? || rank > 7
 
-      while valid_square?(file += i, rank += j)
-        break if (piece = board.at(file, rank))
+        square = [file, rank]
+        return square if board.at(file, rank)
       end
+    end
 
-      [piece, [file, rank]]
+    # Reads the piece on a square, tolerating a nil square (returned by
+    # {#first_piece} when the scan ran off the edge). Kept as a helper so the
+    # callers read the piece once instead of unpacking a `[piece, square]`
+    # tuple per direction scan.
+    #
+    def piece_at(square)
+      square && board.at(square[0], square[1])
     end
 
     # If the move is a capture and there is no piece on the
@@ -331,7 +347,7 @@ module PGN
     end
 
     def valid_square?(file, rank)
-      (0..7).include?(file) && (0..7).include?(rank)
+      file >= 0 && file < 8 && rank >= 0 && rank < 8
     end
 
     def destination_coords
