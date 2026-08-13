@@ -181,12 +181,12 @@ Parser — 500 immortal games (`bench/profile_parse.rb`):
 
 | Metric | original `pgn` | pgn2 | Δ |
 |---|---:|---:|---:|
-| Parse-only allocations (objects) | 1248065 | 603537 | -644528 (-51.6%) |
-| Parse-only allocations (bytes) | 120370470 | 28257414 | -92113056 (-76.5%) |
-| Parse + replay allocations (objects) | 3778073 | 1427586 | -2350487 (-62.2%) |
-| Parse + replay allocations (bytes) | 249570048 | 78104136 | -171465912 (-68.7%) |
-| Parse-only throughput | 1461 ms/i | 327 ms/i | ~4.5x faster |
-| Parse + replay throughput | 1938 ms/i | 826 ms/i | ~2.35x faster |
+| Parse-only allocations (objects) | 1248065 | 347037 | -901028 (-72.2%) |
+| Parse-only allocations (bytes) | 120370470 | 17977414 | -102393056 (-85.1%) |
+| Parse + replay allocations (objects) | 3778073 | 1170586 | -2607487 (-69.0%) |
+| Parse + replay allocations (bytes) | 249570048 | 67804136 | -181765912 (-72.8%) |
+| Parse-only throughput | 1461 ms/i | 305 ms/i | ~4.8x faster |
+| Parse + replay throughput | 1938 ms/i | 816 ms/i | ~2.4x faster |
 
 What changed to get there:
 
@@ -211,6 +211,11 @@ What changed to get there:
 11. `PGN::MoveCalculator` — memoized `destination_coords`, frozen
     `ROOK_RESTRICTIONS`, empty short-circuit in `castling_restrictions`;
     `Move#pawn?` non-allocating.
+12. `PGN::Lexer#scan_one` — returns the matched string directly (stashing
+    type/discarded in ivars) instead of a 3-element `[type, m, discarded]`
+    tuple, so the parser hot path now allocates only the single `[type, value]`
+    array Racc requires per token. Cuts parse allocations ~42% (603537 → 347037
+    objects for 500 games).
 
 Public output (FEN, PGN) is byte-identical to the original gem; the full
 suite (182 examples) stays green. See `bench/IMPROVEMENTS.md` for the per-step

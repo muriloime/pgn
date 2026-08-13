@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.2.0 (2026-08-13)
+
+### Summary
+
+Parse allocation quick win: collapse `PGN::Lexer#scan_one`'s per-token
+3-element tuple. No public API changes; serialized PGN/FEN output stays
+byte-identical. See `bench/IMPROVEMENTS.md` for the per-step deltas.
+
+### Changed
+- **Lexer hot path**: `PGN::Lexer#scan_one` now returns the matched string
+  directly (stashing its type/discarded flag in ivars) instead of a
+  3-element `[type, m, discarded]` tuple, so the parser path (`next_token_pair`)
+  allocates only the single `[type, value]` array Racc requires per token.
+  Selected by per-line allocation profiling (`scan_one`'s tuple was the #1
+  parse allocation site).
+- **Deferred**: the coordinate-only-board + piece-location-index work was
+  profiled and deferred to a single coherent board-representation rewrite
+  (see TODO) — coordinate-board alone measured only ~1.25× replay at medium
+  risk and would likely be superseded by the piece-index rewrite.
+- Performance vs 1.1.0: parse-only allocations −42% objects (603537 → 347037 /
+  500 games); parse+replay −18% objects (1427586 → 1170586). Replay path
+  unchanged. All 182 specs pass; racc-sync OK.
+
 ## 1.1.0 (2026-08-13)
 
 ### Summary

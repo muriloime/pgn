@@ -10,10 +10,26 @@
 
 - Support converting a game to pgn format
 - Speed up parsing
-  - Collapse PGN::Lexer's per-token allocation chain (Array in `scan_one` ->
-    `Token` struct -> Array in racc's `next_token`) to fewer allocations on
-    the hot path; keep the full `Token` (with offset/line) only for the
-    `#tokens` spec helper, which is its only consumer.
+  - ✓ (done in 1.2.0) Removed `PGN::Lexer`'s per-token `Token` Struct
+    allocation on the parser hot path (`next_token_pair`), and collapsed
+    `scan_one`'s `[type, m, discarded]` tuple to a single returned string
+    (type/discarded stashed in ivars). The full `Token` is kept only for the
+    `#tokens` spec helper. Parse allocations −42% (603537 → 347037 / 500 games).
+- Speed up replay via a board-representation rewrite (deferred "Approach B"):
+  per-line profiling shows the remaining replay allocations are architectural
+  — `MoveCalculator#first_piece` scan-return arrays (~5/ply, the #1 site) and
+  `Board#position_for` string joins (~3/ply). Do these as ONE coherent
+  rewrite (not separately, to avoid throwing away work):
+  (a) a piece-location index (piece → squares) so king/disambiguation/origin
+    lookups are O(1) instead of scanning 64 squares — kills `first_piece` scan
+    arrays AND the dominant replay compute (`valid_square?`/`at` ≈ 15/ply calls);
+  (b) a coordinate-only internal board (int square keys, no `"e4"` strings on
+    the hot path) — kills `position_for` strings + `changes` string keys.
+  Caveat: `change!`/`update`/`position_for`/`coordinates_for`/`squares` are
+  spec-tested public API, so the new representation must be additive (string
+  API kept). Realistic ceiling ~2× replay allocation + ~1.5–2× throughput;
+  medium-high risk (Board/MoveCalculator/Position/FEN). Only worth it given a
+  real hot-loop need (replay is already ~0.8 ms/ply).
 - Replace the right-recursive `tag_section`/`variation_list` rules in
   `pgn_parser.y` with ordinary left-recursion plus one explicit `.reverse`
   at the point each list is consumed, so the legacy whittle-order

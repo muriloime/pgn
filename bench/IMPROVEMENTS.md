@@ -141,3 +141,27 @@ byte-identical (covered by `spec/lexer_spec.rb`, `spec/parser_explicit_spec.rb`,
 and the fixture round-trip in `spec/game_spec.rb`). Racc parser is in sync with
 `pgn_parser.y` (CI racc-sync check passes). No public API or serialized-output
 changes.
+
+## Token-array collapse (2026-08-13, v1.2.0)
+
+Collapse `PGN::Lexer#scan_one`'s per-token 3-element `[type, m, discarded]` tuple.
+`scan_one` now returns the matched string directly and stashes its type /
+discarded flag in `@scan_type` / `@scan_discarded` ivars, so the parser hot path
+(`next_token_pair`) allocates only the single `[type, value]` array Racc requires.
+Selected by per-line allocation profiling: `scan_one`'s tuple was the #1 parse
+allocation site. The coordinate-only-board + piece-location-index work was
+profiled and **deferred** — the board rewrite is a larger design (see TODO), and
+coordinate-board alone measured only ~1.25× replay at medium risk and would
+likely be superseded by the piece-index rewrite.
+
+### bench/profile_parse.rb (500 immortal games)
+
+| Metric | BEFORE | AFTER | Δ |
+|---|---|---|---|
+| Parse-only allocations (objects) | 603537 | 347037 | -256500 (-42.5%) |
+| Parse-only allocations (bytes) | 28257414 | 17977414 | -10280000 (-36.4%) |
+| Parse + replay allocations (objects) | 1427586 | 1170586 | -257000 (-18.0%) |
+| Parse + replay allocations (bytes) | 78104136 | 67804136 | -10300000 (-13.2%) |
+
+Replay (`profile_moves.rb`) is unchanged (1709 objects / 103720 bytes) — the
+lexer edit does not touch the replay path. All 182 specs pass; racc-sync OK.

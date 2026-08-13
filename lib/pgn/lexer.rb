@@ -154,10 +154,9 @@ module PGN
 
     # Fast path for the parser: returns [type, value] for the next
     # non-discarded token, or +nil+ at end of input. Does not allocate a
-    # {Token} Struct; the matched offset (needed only by +next_token+) is
-    # stashed in +@last_offset+ instead of being returned, so this stays a
-    # single 2-element array per token instead of an intermediate 3-element
-    # one that would just get unpacked and discarded.
+    # {Token} Struct, and +scan_one+ returns the matched string directly
+    # (stashing its type/discarded flag in ivars) so the only array
+    # allocated per token is the [type, value] pair Racc requires.
     def next_token_pair
       until @ss.eos?
         off = @ss.pos
@@ -170,25 +169,29 @@ module PGN
           return [type, value]
         end
 
-        type, value, discarded = scan_one
+        value = scan_one
         advance_line(value)
-        next if discarded
+        next if @scan_discarded
 
-        note_token(type, off)
+        note_token(@scan_type, off)
         @last_offset = off
-        return [type, value]
+        return [@scan_type, value]
       end
       nil
     end
 
     private
 
-    # Try each terminal rule in order; return [type, matched_string, discarded]
-    # for the first match, or raise if nothing matches at the current position.
+    # Try each terminal rule in order; return the matched string for the
+    # first match (stashing its type and discarded flag in +@scan_type+ /
+    # +@scan_discarded+ so the caller avoids allocating a 3-element tuple),
+    # or raise if nothing matches at the current position.
     def scan_one
       RULES.each do |(type, re, discarded)|
         if (m = @ss.scan(re))
-          return [type, m, discarded]
+          @scan_type = type
+          @scan_discarded = discarded
+          return m
         end
       end
       raise UnconsumedInputError,
