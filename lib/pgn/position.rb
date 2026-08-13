@@ -32,7 +32,6 @@ module PGN
     CASTLING = %w[K Q k q].freeze
 
     attr_accessor :board, :player, :castling, :en_passant, :halfmove, :fullmove
-    attr_reader :zobrist
 
     # @return [PGN::Position] the starting position of a chess game
     #
@@ -58,15 +57,13 @@ module PGN
     #     :white,
     #   )
     #
-    def initialize(board, player, castling = CASTLING, en_passant = nil,
-                   halfmove = 0, fullmove = 1, zobrist: nil)
+    def initialize(board, player, castling = CASTLING, en_passant = nil, halfmove = 0, fullmove = 1)
       self.board      = board
       self.player     = player
       self.castling   = castling
       self.en_passant = en_passant
       self.halfmove   = halfmove
       self.fullmove   = fullmove
-      @zobrist = zobrist || Zobrist.seed(board, player, castling, en_passant)
     end
 
     # @param str [String] the move to make in SAN
@@ -85,15 +82,13 @@ module PGN
       new_fullmove = calculator.increment_fullmove? ? fullmove + 1 : fullmove
       no_move      = str == '--'
 
-      new_board  = no_move ? board : calculator.result_board
-      new_player = next_player
-      new_ep     = calculator.en_passant_square
-
-      new_zobrist = incremental_zobrist(move, calculator, new_board, new_castling, new_ep)
-
       PGN::Position.new(
-        new_board, new_player, new_castling, new_ep, new_halfmove, new_fullmove,
-        zobrist: new_zobrist
+        no_move ? board : calculator.result_board,
+        next_player,
+        new_castling,
+        calculator.en_passant_square,
+        new_halfmove,
+        new_fullmove
       )
     end
 
@@ -137,14 +132,16 @@ module PGN
       zobrist
     end
 
-    private
-
-    # First cut: re-seed from scratch. Correct, and the "keeps the replay
-    # hash in sync" spec pins correctness. Task 7 replaces this with the
-    # incremental XOR-diff path.
-    def incremental_zobrist(_move, calculator, new_board, new_castling, new_ep)
-      Zobrist.update(self, calculator, new_board, new_castling, new_ep)
+    # The Zobrist hash of the position. Computed lazily on first access and
+    # cached, so the replay hot path (which never asks for the hash) pays
+    # nothing; consumers like threefold-repetition checks pay one full seed.
+    #
+    # @return [Integer]
+    def zobrist
+      @zobrist ||= Zobrist.seed(board, player, castling, en_passant)
     end
+
+    private
 
     def board_equal?(other_board)
       0.upto(127).all? { |idx| board.at_index(idx) == other_board.at_index(idx) }
