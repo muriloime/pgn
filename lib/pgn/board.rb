@@ -264,6 +264,33 @@ module PGN
       INDEX_TO_FILE[idx & 0x0F] + INDEX_TO_RANK[idx >> 4]
     end
 
+    # Serializes the board to the FEN board-string portion (ranks 8→1,
+    # files a→h, runs of empty squares collapsed to a digit) by walking
+    # the 0x88 `@cells` array directly. This avoids rebuilding the 8x8
+    # `squares` array on every FEN generation.
+    #
+    # @return [String] e.g. "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+    def fen_board_string
+      rows = []
+      7.downto(0) do |rank|
+        s = String.new
+        run = 0
+        0.upto(7) do |file|
+          piece = @cells[(rank * 16) + file]
+          if piece.nil?
+            run += 1
+          else
+            s << run.to_s if run.positive?
+            run = 0
+            s << piece
+          end
+        end
+        s << run.to_s if run.positive?
+        rows << s
+      end
+      rows.join('/')
+    end
+
     private
 
     def file_of(square)

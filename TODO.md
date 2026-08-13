@@ -67,3 +67,48 @@
   to reuse as-is. The brace check is a bandaid for `clean_text` not fully
   normalizing multi-line/nested comments in one pass; fixing that at the
   source would let `moves=` reuse unconditionally.
+
+## Roadmap ideas (from pioz/chess + python-chess review)
+
+Out of scope for now: SVG rendering, Chess960, Shredder-FEN, FRC castling.
+
+### Group 1 — PGN & Format Robustness
+
+- [ ] Streaming/lazy PGN reader: yield games from an `IO` without slurping
+      the whole file.
+- [ ] EPD read/write (`EPD#to_position`, `FEN#to_epd`).
+- [ ] Richer game-tree API: node-style mainline/variations, add/promote/
+      demote variations.
+- [ ] Nested-comment normalization + brace escaping for byte-perfect round
+      trips.
+- [ ] Tolerant parse mode: collect warnings/errors instead of failing on the
+      first bad move.
+
+### Group 2 — Position Intelligence / Game Rules
+
+- [ ] Full legal-move API (`Position#legal_moves`, `Position#legal?(san)`).
+- [ ] Check / pin / attackers helper methods (logic already exists privately
+      in `Notation`).
+- [ ] Game outcome detection: checkmate, stalemate, insufficient material,
+      50-move rule, threefold repetition.
+- [ ] Mutable push/pop history (`game.push(san)`, `game.pop`).
+- [ ] Position equality/hash based on the FEN-relevant parts.
+
+### Group 3 — Engine & Analysis Integration
+
+- [ ] Lightweight UCI/XBoard engine wrapper (`PGN::Engine`-style).
+- [ ] PGN annotation helpers: auto-generate NAGs/comments from engine info.
+- [ ] Optional Polyglot opening-book reader and/or Syzygy tablebase prober.
+- [ ] UCI-style castling normalization (see pioz/chess).
+
+### Group 4 — Performance / Internals  *(in progress on `perf/internals-plan`)*
+
+- [ ] FEN serializer that walks the 0x88 `@cells` array directly (skip
+      rebuilding `board.squares`).
+- [ ] Incremental Zobrist hashing in `Board`/`Position` for fast repetition /
+      transposition checks.
+- [ ] Lazy position iterator instead of eagerly building `Game#positions`.
+- [ ] Precomputed knight/king attack masks for SAN generation and legal-move
+      checks.
+- [ ] Optional bitboard / C-extension backend for move generation / perft,
+      with a pure-Ruby fallback.

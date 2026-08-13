@@ -1,5 +1,47 @@
 # Changelog
 
+## Unreleased
+
+### Summary
+
+Performance/internals pass: a direct 0x88 FEN builder, a lazy
+`Game#each_position` enumerator, and a lazily-computed Zobrist position
+hash with `Position#hash`/`#eql?`/`#==`. No public behavior change;
+serialized PGN/FEN output stays byte-identical; all 222 specs green.
+
+### Changed
+- **`PGN::Board#fen_board_string`**: new method that serializes the FEN
+  board-string portion by walking the 0x88 `@cells` array directly (ranks
+  8→1, files a→h, empty-run collapsing), instead of rebuilding the 8x8
+  `squares` array and transposing. `FEN#board_string` now delegates to it,
+  so every `position.to_fen` / `game.fen_list` call skips the 8x8 rebuild.
+  FEN output is byte-identical (the `board_string round-trip` spec pins
+  it). Measured (immortal game, 46 positions): 1913 objects / 100464
+  bytes for FEN generation; ~1.27k ips.
+- **`PGN::Game#each_position`**: new lazy enumerator (yields each
+  `PGN::Position` in order, or returns an `Enumerator` without a block);
+  `#positions` is now `each_position.to_a` with the same memoization.
+  Callers that only need the last position can stream without
+  materializing the full array. `positions` still returns the same
+  `Array`. Cost: one `Enumerator` per `#positions` call (parse+replay
+  for 500 games: +500 objects, throughput flat).
+- **`PGN::Zobrist`**: new module with a deterministic 64-bit Zobrist key
+  table (`table`/`side`/`castling`/`ep_file`) and a `seed(board, player,
+  castling, en_passant)` helper, generated once from a frozen seed so
+  hashes are stable across processes. Pure Ruby, no native deps.
+- **`PGN::Position`**: new `#zobrist` (the hash, computed lazily on first
+  access and cached), `#hash`, `#eql?`, and `#==`. Equality compares
+  board cells, side to move, castling rights, and en-passant square —
+  halfmove/fullmove counters are ignored, matching threefold-repetition
+  semantics. The hash is lazy: the replay hot path (which never asks for
+  it) pays nothing (replay stays at 976 objects / 62064 bytes,
+  byte-identical to 1.5.0); consumers pay one full seed on demand. An
+  incremental per-move update was prototyped and rejected: 64-bit
+  Integer XOR allocates a new `Bignum` per operation (~9 per move),
+  which regressed replay by +40% allocations / −32% throughput for a
+  feature nothing currently consumes — laziness keeps the public API
+  with zero hot-path cost.
+
 ## 1.5.0 (2026-08-13)
 
 ### Summary

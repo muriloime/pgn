@@ -100,6 +100,29 @@ describe PGN::Board do
     end
   end
 
+  describe '#fen_board_string' do
+    it 'serializes the start position to the FEN board string' do
+      expect(PGN::Board.start.fen_board_string)
+        .to eq('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR')
+    end
+
+    it 'collapses runs of empty squares into digits' do
+      board = PGN::FEN.new('8/8/8/8/8/8/8/8 w - - 0 1').board
+      expect(board.fen_board_string).to eq('8/8/8/8/8/8/8/8')
+    end
+
+    it 'serializes a mid-game board byte-for-byte like FEN#board_string' do
+      fen = 'r1bqkb1r/pp1p1ppp/2n1pn2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 3 6'
+      board = PGN::FEN.new(fen).board
+      expect(board.fen_board_string).to eq(fen.split.first)
+    end
+
+    it 'serializes rank 8 first and rank 1 last (FEN order)' do
+      board = PGN::FEN.new('4k3/8/8/8/8/8/8/4K3 w - - 0 1').board
+      expect(board.fen_board_string).to eq('4k3/8/8/8/8/8/8/4K3')
+    end
+  end
+
   describe '#inspect' do
     it 'returns a string with unicode pieces and newlines' do
       inspected = PGN::Board.start.inspect

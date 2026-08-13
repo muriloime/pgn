@@ -31,12 +31,7 @@ module PGN
     PLAYERS  = %i[white black].freeze
     CASTLING = %w[K Q k q].freeze
 
-    attr_accessor :board
-    attr_accessor :player
-    attr_accessor :castling
-    attr_accessor :en_passant
-    attr_accessor :halfmove
-    attr_accessor :fullmove
+    attr_accessor :board, :player, :castling, :en_passant, :halfmove, :fullmove
 
     # @return [PGN::Position] the starting position of a chess game
     #
@@ -83,17 +78,10 @@ module PGN
 
       restrictions = calculator.castling_restrictions
       new_castling = restrictions.empty? ? castling : castling - restrictions
-      new_halfmove = if calculator.increment_halfmove?
-                       halfmove + 1
-                     else
-                       0
-                     end
-      new_fullmove = if calculator.increment_fullmove?
-                       fullmove + 1
-                     else
-                       fullmove
-                     end
-      no_move = str == '--'
+      new_halfmove = calculator.increment_halfmove? ? halfmove + 1 : 0
+      new_fullmove = calculator.increment_fullmove? ? fullmove + 1 : fullmove
+      no_move      = str == '--'
+
       PGN::Position.new(
         no_move ? board : calculator.result_board,
         next_player,
@@ -125,6 +113,38 @@ module PGN
         halfmove: halfmove.to_s,
         fullmove: fullmove.to_s
       )
+    end
+
+    # Positions are equal when their board, side to move, castling rights,
+    # and en-passant square match. Halfmove/fullmove counters are ignored
+    # (matching threefold-repetition semantics).
+    def eql?(other)
+      other.is_a?(PGN::Position) &&
+        player == other.player &&
+        castling == other.castling &&
+        en_passant == other.en_passant &&
+        board_equal?(other.board)
+    end
+
+    alias == eql?
+
+    def hash
+      zobrist
+    end
+
+    # The Zobrist hash of the position. Computed lazily on first access and
+    # cached, so the replay hot path (which never asks for the hash) pays
+    # nothing; consumers like threefold-repetition checks pay one full seed.
+    #
+    # @return [Integer]
+    def zobrist
+      @zobrist ||= Zobrist.seed(board, player, castling, en_passant)
+    end
+
+    private
+
+    def board_equal?(other_board)
+      0.upto(127).all? { |idx| board.at_index(idx) == other_board.at_index(idx) }
     end
   end
 end

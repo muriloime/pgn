@@ -124,4 +124,57 @@ describe PGN::Position do
       expect(parsed.to_fen.to_s).to eq(fen)
     end
   end
+
+  describe '#zobrist and equality' do
+    it 'seeds the start position with a stable hash' do
+      expect(PGN::Position.start.zobrist).to be_an(Integer)
+      expect(PGN::Position.start.zobrist).to eq(PGN::Position.start.zobrist)
+    end
+
+    it 'updates the hash after a move (and matches a fresh seed)' do
+      start = PGN::Position.start
+      after = start.move('e4')
+      expect(after.zobrist).to eq(
+        PGN::Zobrist.seed(after.board, after.player, after.castling, after.en_passant)
+      )
+    end
+
+    it 'is equal to an independently built equivalent position' do
+      a = PGN::Position.start.move('e4').move('e5')
+      b = PGN::Position.start.move('e4').move('e5')
+      expect(a).to eq(b)
+      expect(a.hash).to eq(b.hash)
+    end
+
+    it 'is not equal when only the side to move differs' do
+      a = PGN::Position.start
+      b = PGN::Position.start.move('e4')
+      expect(a).not_to eq(b)
+    end
+
+    it 'is not equal when castling rights differ' do
+      fen = 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1'
+      a = PGN::FEN.new(fen).to_position
+      b = a.move('O-O')
+      expect(a).not_to eq(b)
+    end
+
+    it 'ignores halfmove and fullmove counters for equality' do
+      a = PGN::Position.new(PGN::Board.start, :white, %w[K Q k q], nil, 0, 1)
+      b = PGN::Position.new(PGN::Board.start, :white, %w[K Q k q], nil, 7, 9)
+      expect(a).to eq(b)
+      expect(a.hash).to eq(b.hash)
+    end
+
+    it 'keeps the replay hash in sync with a fresh seed for a whole game' do
+      moves = %w[e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6 Be2 e6]
+      pos = PGN::Position.start
+      moves.each do |m|
+        pos = pos.move(m)
+        expect(pos.zobrist).to eq(
+          PGN::Zobrist.seed(pos.board, pos.player, pos.castling, pos.en_passant)
+        ), "drift after #{m}"
+      end
+    end
+  end
 end
