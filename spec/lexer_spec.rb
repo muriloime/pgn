@@ -17,7 +17,7 @@ RSpec.describe PGN::Lexer do
 
   it 'discards % rest-of-line comments' do
     toks = lex("% a comment line\n[Event \"X\"]")
-    expect(toks.map(&:type)).to eq([:lbracket, :tag_name, :string, :rbracket])
+    expect(toks.map(&:type)).to eq(%i[lbracket tag_name string rbracket])
   end
 
   it 'tokenizes the four single-character literals' do
@@ -57,8 +57,8 @@ RSpec.describe PGN::Lexer do
   end
 
   it 'tokenizes nested brace comments recursively' do
-    toks = lex("{outer {inner} tail}")
-    expect(toks[0].value).to eq("{outer {inner} tail}")
+    toks = lex('{outer {inner} tail}')
+    expect(toks[0].value).to eq('{outer {inner} tail}')
   end
 
   it 'tokenizes all game terminations' do
@@ -116,8 +116,8 @@ RSpec.describe PGN::Lexer do
   end
 
   it 'records byte offsets on every token' do
-    toks = lex("1. e4 e5 1-0")
-    expect(toks[0].offset).to eq(0)   # "1."
+    toks = lex('1. e4 e5 1-0')
+    expect(toks[0].offset).to eq(0) # "1."
     expect(toks[1].offset).to eq(3)  # "e4"
     expect(toks[2].offset).to eq(6)  # "e5"
     expect(toks[3].offset).to eq(9)  # "1-0"

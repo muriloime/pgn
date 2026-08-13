@@ -57,8 +57,12 @@ module PGN
   #
 
   class Move
-    attr_accessor :san, :player
-    attr_accessor :piece, :destination, :promotion, :check, :capture, :disambiguation, :castle
+    attr_accessor :san, :player, :destination, :check
+    # piece/promotion/capture/disambiguation/castle have custom writers below
+    # (color normalization, nil-coalescing, etc.), so expose only readers here
+    # to avoid redefining attr_accessor setters (Lint/DuplicateMethods).
+    attr_reader :piece, :promotion, :capture, :disambiguation, :castle
+
     # A regular expression for matching moves in standard algebraic
     # notation
     #
@@ -70,7 +74,7 @@ module PGN
       (?<capture>        x            ){0}
       (?<disambiguation> [a-h]?[1-8]? ){0}
 
-      (?<castle>         O-O(-O)?     ){0}
+      (?<castle>         O-O(?:-O)?    ){0}
 
       (?<normal>
         \g<piece>?
@@ -80,8 +84,8 @@ module PGN
         \g<promotion>?
       ){0}
 
-      \A (\g<castle> | \g<normal>) \g<check>? \z
-    /x.freeze
+      \A (?:\g<castle> | \g<normal>) \g<check>? \z
+    /x
 
     # @param move [String] the move in SAN
     # @param player [Symbol] the player making the move
@@ -115,10 +119,10 @@ module PGN
     end
 
     def promotion=(val)
-      if val
-        val.downcase! if black?
-        @promotion = val.delete('=')
-      end
+      return unless val
+
+      val.downcase! if black?
+      @promotion = val.delete('=')
     end
 
     def capture=(val)
@@ -130,11 +134,11 @@ module PGN
     end
 
     def castle=(val)
-      if val
-        @castle = 'K' if val == 'O-O'
-        @castle = 'Q' if val == 'O-O-O'
-        @castle.downcase! if black?
-      end
+      return unless val
+
+      @castle = 'K' if val == 'O-O'
+      @castle = 'Q' if val == 'O-O-O'
+      @castle.downcase! if black?
     end
 
     # @return [Boolean] whether the move results in check
@@ -164,7 +168,7 @@ module PGN
     # @return [Boolean] whether the piece being moved is a pawn
     #
     def pawn?
-      piece == 'P' || piece == 'p'
+      %w[P p].include?(piece)
     end
   end
 end

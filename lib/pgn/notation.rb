@@ -133,7 +133,7 @@ module PGN
     # Other squares holding `piece` whose move to `to_idx` is legal.
     def same_type_legals(piece, from_idx, to_idx)
       (0...128).each_with_object([]) do |idx, acc|
-        next if (idx & 0x88) != 0
+        next if idx.anybits?(0x88)
         next if idx == from_idx
         next unless @board.at_index(idx) == piece
 
@@ -243,7 +243,7 @@ module PGN
     def slider_reaches?(piece_up, from_idx, to_idx)
       slider_dirs(piece_up).any? do |off|
         i = from_idx + off
-        while (i & 0x88).zero?
+        while i.nobits?(0x88)
           return true if i == to_idx
           break if @board.at_index(i)
 
@@ -264,7 +264,7 @@ module PGN
     end
 
     def own?(piece, color)
-      color == 'w' ? piece == piece.upcase : piece == piece.downcase
+      piece == (color == 'w' ? piece.upcase : piece.downcase)
     end
 
     # Slider ray directions for a piece letter ('B'/'R'/'Q').
@@ -281,7 +281,7 @@ module PGN
     def king_idx(board, color)
       king = color == 'w' ? 'K' : 'k'
       (0...128).each do |idx|
-        next if (idx & 0x88) != 0
+        next if idx.anybits?(0x88)
 
         return idx if board.at_index(idx) == king
       end
@@ -301,7 +301,7 @@ module PGN
       pawn = color == 'w' ? 'P' : 'p'
       offs.any? do |off|
         i = target + off
-        (i & 0x88).zero? && board.at_index(i) == pawn
+        i.nobits?(0x88) && board.at_index(i) == pawn
       end
     end
 
@@ -326,10 +326,11 @@ module PGN
     def ray_hit?(board, target, dirs)
       dirs.each do |off|
         i = target + off
-        while (i & 0x88).zero?
+        while i.nobits?(0x88)
           piece = board.at_index(i)
           if piece
             return true if yield(piece)
+
             break
           end
           i += off
@@ -346,7 +347,7 @@ module PGN
       ep_idx = ep_target_idx(position, board)
 
       (0...128).any? do |idx|
-        next if (idx & 0x88) != 0
+        next if idx.anybits?(0x88)
 
         piece = board.at_index(idx)
         piece && own?(piece, color) && move_from?(board, idx, piece, color, ep_idx)
@@ -384,12 +385,13 @@ module PGN
     def slider_moves?(board, idx, piece, color, dirs)
       dirs.any? do |off|
         t = idx + off
-        while (t & 0x88).zero?
+        while t.nobits?(0x88)
           tp = board.at_index(t)
           if tp.nil?
             return true if safe?(board, idx, t, piece, nil)
           else
             return true if !own?(tp, color) && safe?(board, idx, t, piece, nil)
+
             break
           end
           t += off
@@ -409,24 +411,24 @@ module PGN
       promo_rank = color == 'w' ? 7 : 0
 
       t = idx + dir
-      return false unless (t & 0x88).zero? && board.at_index(t).nil?
+      return false unless t.nobits?(0x88) && board.at_index(t).nil?
 
-      promo = (t >> 4 == promo_rank) ? 'Q' : nil
+      promo = t >> 4 == promo_rank ? 'Q' : nil
       return true if safe?(board, idx, t, piece, promo)
 
       t2 = idx + (dir * 2)
       (idx >> 4) == start_rank && board.at_index(t2).nil? && safe?(board, idx, t2, piece, nil)
     end
 
-    def pawn_captures?(board, idx, piece, color, ep_idx) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+    def pawn_captures?(board, idx, piece, color, ep_idx)
       promo_rank = color == 'w' ? 7 : 0
       caps = color == 'w' ? [15, 17] : [-15, -17]
       caps.any? do |off|
         t = idx + off
-        next false unless (t & 0x88).zero?
+        next false unless t.nobits?(0x88)
 
         tp = board.at_index(t)
-        promo = (t >> 4 == promo_rank) ? 'Q' : nil
+        promo = t >> 4 == promo_rank ? 'Q' : nil
         if tp && !own?(tp, color)
           safe?(board, idx, t, piece, promo)
         elsif tp.nil? && t == ep_idx

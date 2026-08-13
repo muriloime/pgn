@@ -62,10 +62,10 @@ describe PGN::Serializer do
     it 'reproduces the variations.pgn movetext shape, including 2... after variations' do
       game = PGN.parse(File.read('./spec/pgn_files/variations.pgn')).first
       expected = "[Black \"Petrov\"]\n[White \"Somebody\"]\n\n" \
-                "1. e4 e5 2. Nf3 { comment } " \
-                "(2. f4 exf4 { final variation }) " \
-                "(2. Nc3 { other } 2... d5 (2... f5) 3. exd5) " \
-                "2... Nf6 *\n"
+                 '1. e4 e5 2. Nf3 { comment } ' \
+                 '(2. f4 exf4 { final variation }) ' \
+                 '(2. Nc3 { other } 2... d5 (2... f5) 3. exd5) ' \
+                 "2... Nf6 *\n"
       expect(PGN::Serializer.new(game).to_s).to eq(expected)
     end
 

@@ -17,7 +17,7 @@ module PGN
 
     # @return [String] a canonical PGN string ending with a trailing newline
     def to_s
-      tag_section + "\n\n" + movetext_section + "\n"
+      "#{tag_section}\n\n#{movetext_section}\n"
     end
 
     private
@@ -39,18 +39,16 @@ module PGN
     # result, all joined by spaces.
     def movetext_section
       tokens = []
-      if @game.comment && !@game.comment.empty?
-        tokens << "{ #{escape_comment(@game.comment)} }"
-      end
+      tokens << "{ #{escape_comment(@game.comment)} }" if @game.comment && !@game.comment.empty?
       line = emit_line(@game.moves, starting_fullmove, starting_player)
       tokens << line unless line.empty?
       tokens << result_token
-      tokens.join(" ")
+      tokens.join(' ')
     end
 
     # The result token: the game's result if present and non-empty, else "*".
     def result_token
-      (@game.result.nil? || @game.result.empty?) ? "*" : @game.result
+      @game.result.nil? || @game.result.empty? ? '*' : @game.result
     end
 
     # Emit a single line (mainline or variation) of movetext, tracking the
@@ -63,12 +61,11 @@ module PGN
       moves.each do |move|
         if player == :white
           tokens << "#{fullmove}."
-          tokens << move_token(move, fullmove, player)
         else # black
           need_number = prev_player.nil? || prev_had_extras || prev_player != :white
           tokens << "#{fullmove}..." if need_number
-          tokens << move_token(move, fullmove, player)
         end
+        tokens << move_token(move, fullmove, player)
 
         prev_player = player
         prev_had_extras = has_extras?(move)
@@ -76,7 +73,7 @@ module PGN
         player = opposite(player)
       end
 
-      tokens.join(" ")
+      tokens.join(' ')
     end
 
     # A move token: notation plus trailing extras (annotation, comment,
@@ -85,13 +82,11 @@ module PGN
     def move_token(move, fullmove, player)
       parts = [move.notation]
       (move.annotation || []).each { |a| parts << a }
-      if move.comment && !move.comment.empty?
-        parts << "{ #{escape_comment(move.comment)} }"
-      end
+      parts << "{ #{escape_comment(move.comment)} }" if move.comment && !move.comment.empty?
       (move.variations || []).each do |variation|
         parts << "(#{emit_line(variation, fullmove, player)})"
       end
-      parts.join(" ")
+      parts.join(' ')
     end
 
     # Whether a move carries any annotation, comment, or variation.
@@ -118,8 +113,8 @@ module PGN
     # string replacement would otherwise re-interpret backslashes).
     def escape_tag(value)
       value.to_s
-           .gsub("\\") { "\\\\" }
-           .gsub('"') { "\\\"" }
+           .gsub('\\') { '\\\\' }
+           .gsub('"') { '\"' }
     end
 
     # Escape backslashes and braces for a comment body (block form, so the
@@ -133,9 +128,9 @@ module PGN
     # acknowledged v1 limitation.
     def escape_comment(text)
       text.to_s
-          .gsub("\\") { "\\\\" }
-          .gsub("{") { "\\{" }
-          .gsub("}") { "\\}" }
+          .gsub('\\') { '\\\\' }
+          .gsub('{') { '\\{' }
+          .gsub('}') { '\\}' }
     end
   end
 end

@@ -21,16 +21,16 @@ describe PGN::Board do
     end
 
     it 'only contains on-board squares and is nil for off-board source indices' do
-      on_board = (0...128).select { |i| (i & 0x88).zero? }
+      on_board = (0...128).select { |i| i.nobits?(0x88) }
       expect(PGN::Board::KNIGHT_ATTACKS.length).to eq(128)
       expect(PGN::Board::KING_ATTACKS.length).to eq(128)
       on_board.each do |i|
         expect(PGN::Board::KNIGHT_ATTACKS[i]).to be_an(Array)
         expect(PGN::Board::KING_ATTACKS[i]).to be_an(Array)
-        expect(PGN::Board::KNIGHT_ATTACKS[i]).to all(satisfy { |sq| (sq & 0x88).zero? })
-        expect(PGN::Board::KING_ATTACKS[i]).to all(satisfy { |sq| (sq & 0x88).zero? })
+        expect(PGN::Board::KNIGHT_ATTACKS[i]).to all(satisfy { |sq| sq.nobits?(0x88) })
+        expect(PGN::Board::KING_ATTACKS[i]).to all(satisfy { |sq| sq.nobits?(0x88) })
       end
-      (0...128).reject { |i| (i & 0x88).zero? }.each do |i|
+      (0...128).reject { |i| i.nobits?(0x88) }.each do |i|
         expect(PGN::Board::KNIGHT_ATTACKS[i]).to be_nil
         expect(PGN::Board::KING_ATTACKS[i]).to be_nil
       end

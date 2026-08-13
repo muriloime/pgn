@@ -42,7 +42,7 @@ Metrics/AbcSize:
     - "spec/**/*"
 
 Metrics/ClassLength:
-  Max: 210
+  Max: 220
   # notation.rb is the full SAN encoder; splitting it would hurt cohesion.
   Exclude:
     - "lib/pgn/notation.rb"

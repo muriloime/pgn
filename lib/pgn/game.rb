@@ -30,7 +30,9 @@ module PGN
     end
 
     def clean_text(text)
-      text&.gsub(/{(.*)}/, '\1')&.gsub(/\s+/, ' ')&.strip
+      return unless text
+
+      text.gsub(/{(.*)}/, '\1').gsub(/\s+/, ' ').strip
     end
   end
 
@@ -167,9 +169,7 @@ module PGN
       return MoveText.new(entry.include?('0') ? entry.gsub('0', 'O') : entry) if entry.is_a?(String)
 
       notation = entry.notation.include?('0') ? entry.notation.gsub('0', 'O') : entry.notation
-      if notation.equal?(entry.notation) && (entry.comment.nil? || !entry.comment.include?('{'))
-        return entry
-      end
+      return entry if notation.equal?(entry.notation) && (entry.comment.nil? || !entry.comment.include?('{'))
 
       MoveText.new(notation, entry.annotation, entry.comment, entry.variations)
     end
