@@ -69,4 +69,24 @@ Benchmark.ips do |x|
   end
 end
 
+# --- 7. Last-position-only: lazy each_position vs eager positions ---------
+# Both paths build a fresh PGN::Game so the Game construction cost cancels;
+# the difference is building the full positions array (eager) vs not (lazy).
+lazy_report = MemoryProfiler.report do
+  game = PGN::Game.new(SAN, GAME.first.tags, GAME.first.result)
+  last = nil
+  game.each_position { |p| last = p }
+  last
+end
+
+eager_report = MemoryProfiler.report do
+  PGN::Game.new(SAN, GAME.first.tags, GAME.first.result).positions.last
+end
+
+puts "\n=== 7. Last-position-only (#{PLY} plies): lazy vs eager ==="
+puts "lazy  total_allocated objects: #{lazy_report.total_allocated}"
+puts "lazy  total_allocated bytes:   #{lazy_report.total_allocated_memsize}"
+puts "eager total_allocated objects: #{eager_report.total_allocated}"
+puts "eager total_allocated bytes:   #{eager_report.total_allocated_memsize}"
+
 puts "\nDone. Compare this file against bench/baseline_moves.txt after optimizations."

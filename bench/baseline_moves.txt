@@ -15,9 +15,9 @@ total_allocated bytes:   0
 === 4. Replay throughput (ips, excluding parse) ===
 ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
 Warming up --------------------------------------
-     replay immortal   171.000 i/100ms
+     replay immortal   177.000 i/100ms
 Calculating -------------------------------------
-     replay immortal      1.757k (± 2.8%) i/s  (569.04 μs/i) -      8.892k in   5.059923s
+     replay immortal      1.794k (± 1.8%) i/s  (557.31 μs/i) -      9.027k in   5.030869s
 
 === 5. FEN generation x46 (target of direct-0x88 FEN) ===
 total_allocated objects: 1913
@@ -26,8 +26,14 @@ total_allocated bytes:   100464
 === 6. FEN throughput (ips) ===
 ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
 Warming up --------------------------------------
-        fen immortal   131.000 i/100ms
+        fen immortal   133.000 i/100ms
 Calculating -------------------------------------
-        fen immortal      1.268k (± 2.8%) i/s  (788.52 μs/i) -      6.419k in   5.061504s
+        fen immortal      1.335k (± 1.0%) i/s  (749.09 μs/i) -      6.783k in   5.081104s
+
+=== 7. Last-position-only (45 plies): lazy vs eager ===
+lazy  total_allocated objects: 1063
+lazy  total_allocated bytes:   66832
+eager total_allocated objects: 1065
+eager total_allocated bytes:   67480
 
 Done. Compare this file against bench/baseline_moves.txt after optimizations.
