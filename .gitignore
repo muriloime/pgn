@@ -18,7 +18,3 @@ tmp
 
 
 tags
-# Fixtures that do not round-trip byte-for-byte (kept on disk for parser
-# specs, excluded from the game_spec round-trip gate which uses git ls-files).
-/spec/pgn_files/doublequotes.pgn
-/spec/pgn_files/specialcharacters.pgn
