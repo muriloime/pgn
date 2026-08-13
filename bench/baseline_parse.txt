@@ -13,13 +13,13 @@ ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
 Warming up --------------------------------------
      parse 500 games     1.000 i/100ms
 Calculating -------------------------------------
-     parse 500 games      4.926 (±20.3%) i/s  (203.01 ms/i) -     25.000 in   5.075163s
+     parse 500 games      5.503 (±18.2%) i/s  (181.72 ms/i) -     28.000 in   5.088202s
 
 === 4. Parse + replay throughput (ips) ===
 ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
 Warming up --------------------------------------
 parse+replay 500 games     1.000 i/100ms
 Calculating -------------------------------------
-parse+replay 500 games      2.065 (± 0.0%) i/s  (484.34 ms/i) -     11.000 in   5.327699s
+parse+replay 500 games      2.089 (± 0.0%) i/s  (478.59 ms/i) -     11.000 in   5.264475s
 
 Done. Compare this file against bench/baseline_parse.txt after optimizations.
