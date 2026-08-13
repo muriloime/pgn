@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.1.0 (2026-08-13)
+
+### Summary
+
+Performance quick wins ("Approach A"): safe, behavior-compatible
+micro-optimizations on top of the 1.0 parser. No public API changes; serialized
+PGN/FEN output stays byte-identical. See
+`docs/superpowers/specs/2026-08-13-pgn-performance-quick-wins-design.md` and
+`bench/IMPROVEMENTS.md` for the design and per-step deltas.
+
+### Changed
+- **Lexer hot path**: `PGN::Lexer#next_token_pair` returns `[type, value]`
+  without allocating a `Token` Struct (or its `keyword_init` Hash), via a shared
+  scanning routine that preserves `game_starts` for verbatim `pgn` slicing.
+  `PgnParser#next_token` uses it.
+- **`PGN::Game#moves=`**: reuses an existing `MoveText` when its comment is
+  already clean (halving `MoveText` allocations on the parse path); still
+  re-wraps to preserve the legacy double-`clean_text` for multi-line/nested
+  comments.
+- **`PGN::Move#piece=`**: non-allocating castling guard (`start_with?('O')`
+  instead of `match('O-O')`), removing a `MatchData` from every `Move.new`.
+- **`PGN::Position`**: `next_player` uses a ternary instead of
+  `(PLAYERS - [player])`; `Position#move` skips `castling - restrictions` when
+  there are no restrictions.
+- **`PGN::MoveCalculator`**: memoized `destination_coords`, frozen
+  `ROOK_RESTRICTIONS` constant, empty short-circuit in `castling_restrictions`.
+- **`PGN::Move#pawn?`**: non-allocating (`==` instead of `%w[P p].include?`).
+- Performance vs 1.0: replay allocations −21% objects / −27% bytes; parse-only
+  allocations −3.6% objects / −28% bytes; parse + replay −15% objects / −28%
+  bytes. The full hand-rolled SAN parser was deferred (marginal payoff, high
+  risk) per the design's "measure first" guidance.
+
 ## 1.0.0 (2026-08-13)
 
 ### Summary
