@@ -117,6 +117,39 @@ module PGN
       [:tag_name,         TAG_NAME,         false]
     ].freeze.each(&:freeze)
 
+    # Byte-dispatch table: maps the leading byte of the next token to the
+    # ordered list of RULES indices that could possibly match it. This lets
+    # {#scan_one} try one or two regexes for the common tokens instead of
+    # walking all nine rules in order (StringScanner#scan was ~23% of parse
+    # CPU and the rule loop ~38% inclusive per profiling). The order within
+    # each list mirrors RULES, so tokenization is byte-compatible with the
+    # linear scan. Indices: 0 wsp, 1 pgn_comment, 2 game_termination,
+    # 3 san_move, 4 move_number, 5 nag, 6 comment, 7 string, 8 tag_name.
+    BYTE_DISPATCH = begin
+      h = {
+        9 => [0], 10 => [0], 11 => [0], 12 => [0], 13 => [0], 32 => [0], # whitespace
+        37 => [1],                                            # % pgn_comment
+        42 => [2],                                            # * game_termination
+        34 => [7],                                            # " string
+        123 => [6],                                           # { comment
+        36 => [5], 63 => [5], 33 => [5], # $ ? ! nag
+        48 => [2, 3, 4, 8], 49 => [2, 4, 8], # 0, 1 (term/castle/num/tag)
+        95 => [8] # _ tag_name
+      }
+      (50..57).each { |b| h[b] = [4, 8] }                  # 2..9 move_number/tag_name
+      [66, 75, 78, 79, 81, 82].each { |b| h[b] = [3, 8] }  # B K N O Q R san_move/tag
+      (97..104).each { |b| h[b] = [3, 8] }                 # a-h pawn san_move/tag
+      # other tag_name letters
+      ((65..90).to_a + (105..122).to_a - [66, 75, 78, 79, 81, 82]).each do |b|
+        h[b] = [8]
+      end
+      h.each_value(&:freeze)
+      h.freeze
+    end
+
+    # Fallback for bytes not in BYTE_DISPATCH: try every rule in order.
+    ALL_RULES = (0...RULES.length).to_a.freeze
+
     # Single-character literals, matched by their byte value: [type, frozen value].
     LITERAL_BYTES = {
       91 => [:lbracket, '['], # [
@@ -185,14 +218,17 @@ module PGN
     # Try each terminal rule in order; return the matched string for the
     # first match (stashing its type and discarded flag in +@scan_type+ /
     # +@scan_discarded+ so the caller avoids allocating a 3-element tuple),
-    # or raise if nothing matches at the current position.
+    # or raise if nothing matches at the current position. Uses
+    # {BYTE_DISPATCH} to try only the rules that can match the leading byte.
     def scan_one
-      RULES.each do |(type, re, discarded)|
-        if (m = @ss.scan(re))
-          @scan_type = type
-          @scan_discarded = discarded
-          return m
-        end
+      indices = BYTE_DISPATCH[@input.getbyte(@ss.pos)] || ALL_RULES
+      indices.each do |i|
+        type, re, discarded = RULES[i]
+        next unless (m = @ss.scan(re))
+
+        @scan_type = type
+        @scan_discarded = discarded
+        return m
       end
       raise UnconsumedInputError,
             "Unmatched input #{@input.byteslice(@ss.pos..).inspect} on line #{@line}"

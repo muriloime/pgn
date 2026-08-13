@@ -21,8 +21,10 @@ module_eval(<<'...end pgn_parser.y/module_eval...', 'pgn_parser.y', 97)
   def next_token
     pair = @lexer.next_token_pair
     return [false, false] unless pair
-    type, value = pair
-    [translate_type(type), value]
+    # Mutate the lexer's [type, value] pair in place rather than allocating
+    # a second translated pair -- one array per token is the Racc floor.
+    pair[0] = translate_type(pair[0])
+    pair
   end
 
   private
