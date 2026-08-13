@@ -11,6 +11,15 @@ Gem::Specification.new do |spec|
   spec.summary       = 'A PGN parser for Ruby'
   spec.homepage      = 'https://github.com/muriloime/pgn'
   spec.license       = 'MIT'
+  spec.required_ruby_version = '>= 3.0'
+
+  spec.metadata = {
+    'homepage_uri'      => 'https://github.com/muriloime/pgn',
+    'source_code_uri'   => 'https://github.com/muriloime/pgn',
+    'bug_tracker_uri'   => 'https://github.com/muriloime/pgn/issues',
+    'changelog_uri'     => 'https://github.com/muriloime/pgn/blob/main/CHANGELOG.md',
+    'rubygems_mfa_required' => 'true'
+  }
 
   spec.files         = `git ls-files`.split($/)
   spec.executables   = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
@@ -21,6 +30,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'pry'
   spec.add_development_dependency 'rake'
   spec.add_development_dependency 'rspec'
+  spec.add_development_dependency 'racc'
   spec.add_development_dependency 'benchmark-ips'
   spec.add_development_dependency 'memory_profiler'
   spec.add_development_dependency 'rubocop', '~> 1.60'

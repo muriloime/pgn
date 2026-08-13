@@ -1,0 +1,59 @@
+name: Publish to RubyGems
+
+# Publishes the gem to rubygems.org when a `v*` tag is pushed.
+#
+# Manual one-time setup (see the PR/commit notes):
+#   1. Create a RubyGems API key with at least the "Push rubygem" scope at
+#      https://rubygems.org/profile/api_keys
+#   2. Add it as a repository secret named RUBYGEMS_API_KEY:
+#      Settings -> Secrets and variables -> Actions -> New repository secret
+#
+# To release a new version locally:
+#   bump lib/pgn/version.rb -> commit -> tag v<x.y.z> -> git push --tags
+# This workflow then builds and pushes the .gem automatically.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    name: Build & push gem
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Build gem
+        run: bundle exec rake build
+
+      - name: Configure RubyGems credentials
+        run: |
+          mkdir -p "$HOME/.gem"
+          printf -- ":rubygems_api_key: %s\n" "${RUBYGEMS_API_KEY}" > "$HOME/.gem/credentials"
+          chmod 0600 "$HOME/.gem/credentials"
+        env:
+          RUBYGEMS_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+
+      - name: Push gem
+        run: gem push pkg/*.gem
+
+      - name: Verify publication
+        continue-on-error: true
+        run: |
+          ver="$(ruby -rpgn/version -e 'print PGN::VERSION')"
+          for i in 1 2 3 4 5 6; do
+            if gem fetch pgn2 --version "$ver" --platform gem >/dev/null 2>&1; then
+              echo "pgn2 $ver published to rubygems.org"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "gem push succeeded but fetch verify timed out (rubygems propagation); check https://rubygems.org/gems/pgn2"
