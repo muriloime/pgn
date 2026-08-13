@@ -1,6 +1,40 @@
 # Changelog
 
-## 1.4.0 (unreleased)
+## 1.5.0 (2026-08-13)
+
+### Summary
+
+Clarity refactor on the 0x88 hot path, plus a small parser perf win: no
+public API changes, no behavior change; serialized PGN/FEN output stays
+byte-identical; all 201 specs green.
+
+### Changed
+- **`PGN::Board`**: promoted the on-board bitmask test and square-name
+  lookup to public `on_board?(idx)` / `square_name(idx)` methods,
+  replacing private duplicates of the same logic in `MoveCalculator`.
+  Added a named `Board.from_cells(cells)` factory for building a board
+  directly from a 128-cell 0x88 array; `#dup` (called every move) now
+  routes through it instead of reaching around the constructor via
+  `Board.allocate` + `instance_variable_set` directly. Performance is
+  identical — same allocate + one ivar set — just a documented factory
+  instead of a reflective one-off.
+- **`PGN::MoveCalculator`**: calls `board.on_board?`/`board.square_name`
+  instead of its own private copies; named the castling-table square
+  literals (`C1`..`G8`) instead of raw 0x88 integers in `CASTLING`, for
+  readability. `#board`/`#move` are now `attr_reader` instead of
+  `attr_accessor` — there was no external writer, and the `@dest_idx`
+  memo already silently relied on both never changing after
+  `#initialize`; dropping the setters enforces that invariant in the
+  type instead of by convention.
+- **`PGN::Lexer`**: dropped the per-token `@line` counter (one
+  `str.count("\n")` via `advance_line` on every `next_token`/
+  `next_token_pair` call) in favor of a lazy `line_at(off)`, computed
+  only when a line number is actually needed (error messages, the spec
+  `tokens` helper) — the parser itself never reads it. Removes a
+  `str.count("\n")` call from the parse hot path (~6% of parse CPU for
+  a value that was never read).
+
+## 1.4.0 (2026-08-13)
 
 ### Summary
 
