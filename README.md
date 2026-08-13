@@ -206,8 +206,8 @@ Parser — 500 immortal games (`bench/profile_parse.rb`):
 |---|---:|---:|---:|
 | Parse-only allocations (objects) | 1248065 | 288537 | -959528 (-76.9%) |
 | Parse-only allocations (bytes) | 120370470 | 15640374 | -104730096 (-87.0%) |
-| Parse + replay allocations (objects) | 3778073 | 773030 | -3005043 (-79.5%) |
-| Parse + replay allocations (bytes) | 249570048 | 45626128 | -203943920 (-81.7%) |
+| Parse + replay allocations (objects) | 3778073 | 773530 | -3004543 (-79.5%) |
+| Parse + replay allocations (bytes) | 249570048 | 45706128 | -203863920 (-81.7%) |
 | Parse-only throughput | 1461 ms/i | 203 ms/i | ~7.2x faster |
 | Parse + replay throughput | 1938 ms/i | 484 ms/i | ~4.0x faster |
 
@@ -272,9 +272,28 @@ What changed to get there:
     floor). Parse-only throughput +25% (305 → 203 ms/i), parse allocations
     −17% (347037 → 288537 objects / 17977414 → 15640374 bytes for 500 games).
     Output byte-identical.
+16. `PGN::Board#fen_board_string` — serializes the FEN board string by
+    walking the 0x88 `@cells` array directly (ranks 8→1, files a→h, empty-run
+    collapsing) instead of rebuilding the 8x8 `squares` array and
+    transposing on every `position.to_fen` / `game.fen_list`. `FEN#board_string`
+    delegates to it. FEN output byte-identical. Measured on the immortal game
+    (46 positions): FEN generation allocations −40% (3201 → 1913 objects /
+    231104 → 100464 bytes), ~1.44× throughput (1140 → 792 µs/i). Adds a new
+    `bench/baseline_moves.txt` section 5/6 for FEN allocation/throughput.
+17. `PGN::Game#each_position` / `PGN::Zobrist` — additive features, not hot-
+    path wins. `each_position` is a lazy enumerator sharing the replay loop
+    with `#positions` (one `Enumerator` per `#positions` call, hence the
+    parse+replay +500 objects / +80000 bytes in the table above vs. the prior
+    baseline). `PGN::Zobrist` provides a deterministic 64-bit hash table and
+    `Position#zobrist`/`#hash`/`#eql?`/`#==`; the hash is computed lazily and
+    cached, so the replay hot path (which never asks for it) pays nothing —
+    an incremental per-move update was prototyped and rejected because 64-bit
+    Integer XOR allocates a `Bignum` per operation (~9/move), regressing
+    replay +40% allocations / −32% throughput for a feature nothing
+    currently consumes. Replay stays at 976 objects / 62064 bytes.
 
 Public output (FEN, PGN) is byte-identical to the original gem; the full
-suite (201 examples) stays green. See `bench/IMPROVEMENTS.md` for the per-step
+suite (222 examples) stays green. See `bench/IMPROVEMENTS.md` for the per-step
 before/after deltas that produced these tables.
 
 ## Installation
