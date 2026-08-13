@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'io/console'
 
 module PGN
@@ -11,12 +13,12 @@ module PGN
       @variations = variations
     end
 
-    def ==(m)
-      to_s == m.to_s
+    def ==(other)
+      to_s == other.to_s
     end
 
-    def eql?(m)
-      self == m
+    def eql?(other)
+      self == other
     end
 
     def hash
@@ -31,6 +33,7 @@ module PGN
       text&.gsub(/{(.*)}/, '\1')&.gsub(/\s+/, ' ')&.strip
     end
   end
+
   # {PGN::Game} holds all of the information about a game. It is either
   # the result of parsing a PGN file, or created by hand.
   #
@@ -57,9 +60,9 @@ module PGN
     attr_accessor :tags, :result, :pgn, :comment
     attr_reader :moves
 
-    LEFT  = /(a|\x1B\[D)\z/.freeze
-    RIGHT = /(d|\x1B\[C)\z/.freeze
-    EXIT  = /(q|\x03)\z/.freeze
+    LEFT  = /(a|\x1B\[D)\z/
+    RIGHT = /(d|\x1B\[C)\z/
+    EXIT  = /(q|\x03)\z/
 
     # @param moves [Array<String>] a list of moves in SAN
     # @param tags [Hash<String, String>] metadata about the game
@@ -77,28 +80,8 @@ module PGN
     #
     # Standardize castling moves to use O's instead of 0's
     #
-    # Reuse-safety invariant: when an element is already a MoveText we reuse
-    # it directly (sharing one object between the parser's move tree and
-    # Game#moves) whenever its comment is already fully cleaned. This is safe
-    # because nothing mutates a MoveText after this assignment returns. We
-    # still re-wrap when the comment carries braces: the parser's single-pass
-    # clean_text leaves braces on multi-line/nested comments, and the second
-    # clean_text that MoveText.new applies here is load-bearing for those
-    # (matches the legacy whittle byte-output). Skipping it would change
-    # serialized comments.
     def moves=(moves)
-      @moves =
-        moves.map do |m|
-          if m.is_a?(String)
-            MoveText.new(m.include?('0') ? m.gsub('0', 'O') : m)
-          elsif m.notation.include?('0')
-            MoveText.new(m.notation.gsub('0', 'O'), m.annotation, m.comment, m.variations)
-          elsif m.comment.nil? || !m.comment.include?('{')
-            m
-          else
-            MoveText.new(m.notation, m.annotation, m.comment, m.variations)
-          end
-        end
+      @moves = moves.map { |m| standardize_castling(m) }
     end
 
     # @return [String] a canonical PGN string for this game, ending with a
@@ -152,17 +135,34 @@ module PGN
       loop do
         puts "\e[H\e[2J"
         puts positions[index].inspect
-        hist[0..2] = (hist[1..2] << STDIN.getch)
+        hist[0..2] = (hist[1..2] << $stdin.getch)
 
         case hist.join
         when LEFT
-          index -= 1 if index > 0
+          index -= 1 if index.positive?
         when RIGHT
           index += 1 if index < moves.length
         when EXIT
           break
         end
       end
+    end
+
+    private
+
+    # A MoveText is reused as-is (no new object) when its notation needs no
+    # '0'->'O' fix and its comment has no braces left to clean; a braced
+    # comment still needs MoveText.new's second clean_text pass to match the
+    # legacy whittle byte-output.
+    def standardize_castling(entry)
+      return MoveText.new(entry.include?('0') ? entry.gsub('0', 'O') : entry) if entry.is_a?(String)
+
+      notation = entry.notation.include?('0') ? entry.notation.gsub('0', 'O') : entry.notation
+      if notation.equal?(entry.notation) && (entry.comment.nil? || !entry.comment.include?('{'))
+        return entry
+      end
+
+      MoveText.new(notation, entry.annotation, entry.comment, entry.variations)
     end
   end
 end

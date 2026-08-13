@@ -146,29 +146,19 @@ module PGN
 
     # Returns the next {Token}, or +nil+ at end of input.
     def next_token
-      type, value, off = scan_next
+      type, value = next_token_pair
       return nil unless type
-      Token.new(type: type, value: value, offset: off, line: @line)
+
+      Token.new(type: type, value: value, offset: @last_offset, line: @line)
     end
 
     # Fast path for the parser: returns [type, value] for the next
     # non-discarded token, or +nil+ at end of input. Does not allocate a
-    # {Token} Struct. Shares the same scanning routine and the same
-    # +note_token+ / +advance_line+ side effects as +next_token+ (so
-    # +game_starts+ tracking is preserved).
+    # {Token} Struct; the matched offset (needed only by +next_token+) is
+    # stashed in +@last_offset+ instead of being returned, so this stays a
+    # single 2-element array per token instead of an intermediate 3-element
+    # one that would just get unpacked and discarded.
     def next_token_pair
-      type, value, = scan_next
-      return nil unless type
-      [type, value]
-    end
-
-    private
-
-    # Scan to the next non-discarded token and return [type, value, offset],
-    # or nil at end of input. Performs the exact +advance_line+ and
-    # +note_token+ side effects that +next_token+ historically did, so
-    # +game_starts+ (used for verbatim +Game#pgn+ slicing) stays correct.
-    def scan_next
       until @ss.eos?
         off = @ss.pos
 
@@ -176,7 +166,8 @@ module PGN
           type, value = lit
           @ss.pos = off + 1
           note_token(type, off)
-          return [type, value, off]
+          @last_offset = off
+          return [type, value]
         end
 
         type, value, discarded = scan_one
@@ -184,10 +175,13 @@ module PGN
         next if discarded
 
         note_token(type, off)
-        return [type, value, off]
+        @last_offset = off
+        return [type, value]
       end
       nil
     end
+
+    private
 
     # Try each terminal rule in order; return [type, matched_string, discarded]
     # for the first match, or raise if nothing matches at the current position.

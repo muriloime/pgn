@@ -118,15 +118,13 @@ module PGN
         restrict += %w[K Q]
       when 'k'
         restrict += %w[k q]
-      when 'R'
-        restrict << ROOK_RESTRICTIONS[origin]
-      when 'r'
+      when 'R', 'r'
         restrict << ROOK_RESTRICTIONS[origin]
       end
 
       # when castling occurs
-      restrict += %w[K Q] if %w[K Q].include? move.castle
-      restrict += %w[k q] if %w[k q].include? move.castle
+      restrict += %w[K Q] if %w[K Q].include?(move.castle)
+      restrict += %w[k q] if %w[k q].include?(move.castle)
 
       # when a rook is taken
       restrict << 'Q' if move.destination == 'a1'
@@ -337,7 +335,7 @@ module PGN
     end
 
     def destination_coords
-      @dest_coords ||= board.coordinates_for(move.destination)
+      @destination_coords ||= board.coordinates_for(move.destination)
     end
   end
 end

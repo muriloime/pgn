@@ -112,13 +112,20 @@ rule
 
   private
 
-  # Punctuation tokens are racc'd by literal; everything else is racc'd by
-  # the upcased lexer symbol (e.g. :san_move -> :SAN_MOVE), so there's a
-  # single source of truth for the token vocabulary: PGN::Lexer's rules.
-  LITERAL_TOKENS = { lbracket: '[', rbracket: ']', lparen: '(', rparen: ')' }.freeze
+  # Punctuation tokens are racc'd by their literal character (taken from
+  # PGN::Lexer::LITERAL_BYTES, the single source of truth for those
+  # characters); everything else is racc'd by the upcased lexer symbol.
+  # A complete frozen lookup keeps this a plain hash read for every token
+  # instead of allocating two Strings (`to_s` + `upcase`) per token.
+  TOKEN_TRANSLATIONS = PGN::Lexer::LITERAL_BYTES.values.to_h.merge(
+    string: :STRING, comment: :COMMENT, game_termination: :GAME_TERMINATION,
+    san_move: :SAN_MOVE, nag: :NAG, move_number: :MOVE_NUMBER, tag_name: :TAG_NAME
+  ).freeze
 
   def translate_type(sym)
-    LITERAL_TOKENS[sym] || sym.to_s.upcase.to_sym
+    TOKEN_TRANSLATIONS.fetch(sym) do
+      raise "PGN::Lexer produced an unknown token type: #{sym.inspect}"
+    end
   end
 
   # Slice the verbatim raw PGN text per game out of the original input using
