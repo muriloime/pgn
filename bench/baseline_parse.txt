@@ -5,21 +5,21 @@ total_allocated objects: 347037
 total_allocated bytes:   17977414
 
 === 2. Parse + replay allocations (500 games) ===
-total_allocated objects: 1170586
-total_allocated bytes:   67804136
+total_allocated objects: 1101586
+total_allocated bytes:   62164136
 
 === 3. Parse-only throughput (ips) ===
 ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
 Warming up --------------------------------------
      parse 500 games     1.000 i/100ms
 Calculating -------------------------------------
-     parse 500 games      4.086 (± 0.0%) i/s  (244.74 ms/i) -     21.000 in   5.139596s
+     parse 500 games      4.045 (± 0.0%) i/s  (247.24 ms/i) -     21.000 in   5.192126s
 
 === 4. Parse + replay throughput (ips) ===
 ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
 Warming up --------------------------------------
 parse+replay 500 games     1.000 i/100ms
 Calculating -------------------------------------
-parse+replay 500 games      1.472 (± 0.0%) i/s  (679.56 ms/i) -      8.000 in   5.436470s
+parse+replay 500 games      1.518 (± 0.0%) i/s  (658.97 ms/i) -      8.000 in   5.271758s
 
 Done. Compare this file against bench/baseline_parse.txt after optimizations.
