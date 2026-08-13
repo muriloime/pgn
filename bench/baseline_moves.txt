@@ -1,8 +1,8 @@
 Workload: immortal game, 45 plies
 
 === 1. Replay allocations (45 plies, no parse) ===
-total_allocated objects: 976
-total_allocated bytes:   62064
+total_allocated objects: 931
+total_allocated bytes:   66728
 
 === 2. Board#dup x45 (target of flat-board COW) ===
 total_allocated objects: 91
@@ -15,25 +15,42 @@ total_allocated bytes:   0
 === 4. Replay throughput (ips, excluding parse) ===
 ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
 Warming up --------------------------------------
-     replay immortal   167.000 i/100ms
+     replay immortal   176.000 i/100ms
 Calculating -------------------------------------
-     replay immortal      1.726k (± 2.4%) i/s  (579.22 μs/i) -      8.684k in   5.029910s
+     replay immortal      1.752k (± 3.1%) i/s  (570.75 μs/i) -      8.800k in   5.022596s
 
 === 5. FEN generation x46 (target of direct-0x88 FEN) ===
-total_allocated objects: 1913
-total_allocated bytes:   100464
+total_allocated objects: 1821
+total_allocated bytes:   96784
 
 === 6. FEN throughput (ips) ===
 ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
 Warming up --------------------------------------
-        fen immortal   129.000 i/100ms
+        fen immortal   130.000 i/100ms
 Calculating -------------------------------------
-        fen immortal      1.302k (± 3.4%) i/s  (767.90 μs/i) -      6.579k in   5.052006s
+        fen immortal      1.305k (± 2.5%) i/s  (766.24 μs/i) -      6.630k in   5.080141s
 
 === 7. Last-position-only (45 plies): lazy vs eager ===
-lazy  total_allocated objects: 1063
-lazy  total_allocated bytes:   66832
-eager total_allocated objects: 1065
-eager total_allocated bytes:   67480
+lazy  total_allocated objects: 1018
+lazy  total_allocated bytes:   65032
+eager total_allocated objects: 1020
+eager total_allocated bytes:   65680
+
+=== 8. SAN generation x45 (target of attack masks) ===
+total_allocated objects: 1387
+total_allocated bytes:   206216
+
+=== 8b. SAN throughput (ips) ===
+ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
+Warming up --------------------------------------
+        san immortal    36.000 i/100ms
+Calculating -------------------------------------
+        san immortal    364.877 (± 0.8%) i/s    (2.74 ms/i) -      1.836k in   5.031829s
+
+=== 9. Retained memory (45 plies): lazy vs eager ===
+lazy  total_retained objects: 95
+lazy  total_retained bytes:   6280
+eager total_retained objects: 287
+eager total_retained bytes:   17232
 
 Done. Compare this file against bench/baseline_moves.txt after optimizations.
