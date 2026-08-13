@@ -1,0 +1,103 @@
+name: Release
+
+# Auto-releases on any push to `main` whose version (lib/pgn/version.rb) does
+# not yet have a matching `v<x.y.z>` tag. It gates on the RSpec matrix, then
+# creates the tag and pushes the gem to rubygems.org in this same workflow
+# (a tag pushed by the GITHUB_TOKEN does NOT trigger other workflows, so the
+# publish happens here directly to avoid that limitation).
+#
+# Manual releases still work: `git tag vX.Y.Z && git push origin vX.Y.Z` fires
+# publish.yml (human-pushed tags do trigger workflows).
+#
+# Requires the RUBYGEMS_API_KEY repository secret (already set).
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    name: Detect version bump
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      should_release: ${{ steps.ver.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: ver
+        run: |
+          version="$(ruby -Ilib -rpgn/version -e 'print PGN::VERSION')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --tags origin "refs/tags/v$version" | grep -q .; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "v$version already tagged; skipping release"
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "v$version is new; will release"
+          fi
+
+  test:
+    name: RSpec (ruby ${{ matrix.ruby }})
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        ruby: ['3.1', '3.2', '3.3', '3.4']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - run: bundle exec rspec
+
+  release:
+    name: Tag & publish
+    needs: [check, test]
+    if: needs.check.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Create and push tag v${{ needs.check.outputs.version }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "v${{ needs.check.outputs.version }}" -m "v${{ needs.check.outputs.version }}"
+          git push origin "v${{ needs.check.outputs.version }}"
+
+      - name: Build gem
+        run: bundle exec rake build
+
+      - name: Configure RubyGems credentials
+        run: |
+          mkdir -p "$HOME/.gem"
+          printf -- ":rubygems_api_key: %s\n" "${RUBYGEMS_API_KEY}" > "$HOME/.gem/credentials"
+          chmod 0600 "$HOME/.gem/credentials"
+        env:
+          RUBYGEMS_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+
+      - name: Push gem
+        run: gem push pkg/*.gem
+
+      - name: Verify publication
+        continue-on-error: true
+        run: |
+          ver="${{ needs.check.outputs.version }}"
+          for i in 1 2 3 4 5 6; do
+            if gem fetch pgn2 --version "$ver" --platform gem >/dev/null 2>&1; then
+              echo "pgn2 $ver published to rubygems.org"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "gem push succeeded but fetch verify timed out; check https://rubygems.org/gems/pgn2"
