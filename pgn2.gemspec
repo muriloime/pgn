@@ -17,8 +17,7 @@ Gem::Specification.new do |spec|
     'homepage_uri'      => 'https://github.com/muriloime/pgn',
     'source_code_uri'   => 'https://github.com/muriloime/pgn',
     'bug_tracker_uri'   => 'https://github.com/muriloime/pgn/issues',
-    'changelog_uri'     => 'https://github.com/muriloime/pgn/blob/main/CHANGELOG.md',
-    'rubygems_mfa_required' => 'true'
+    'changelog_uri'     => 'https://github.com/muriloime/pgn/blob/main/CHANGELOG.md'
   }
 
   spec.files         = `git ls-files`.split($/)
