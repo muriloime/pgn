@@ -10,7 +10,9 @@ name: Publish to RubyGems
 #
 # To release a new version locally:
 #   bump lib/pgn/version.rb -> commit -> tag v<x.y.z> -> git push --tags
-# This workflow then builds and pushes the .gem automatically.
+# This workflow then builds and pushes the .gem automatically — but only after
+# the RSpec matrix, RuboCop, bundler-audit, and the racc in-sync check all
+# pass.
 
 on:
   push:
@@ -33,9 +35,45 @@ jobs:
           bundler-cache: true
       - run: bundle exec rspec
 
+  rubocop:
+    name: RuboCop (on tag)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - run: bundle exec rubocop -f github
+
+  bundle-audit:
+    name: Bundler-audit (on tag)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - run: bundle exec bundle-audit update
+      - run: bundle exec bundle-audit check
+
+  parser-reproducible:
+    name: Racc parser in sync with grammar (on tag)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - run: |
+          bundle exec racc -o /tmp/pgn_parser.check.rb lib/pgn/pgn_parser.y
+          diff -u lib/pgn/pgn_parser.rb /tmp/pgn_parser.check.rb
+
   publish:
     name: Build & push gem
-    needs: test
+    needs: [test, rubocop, bundle-audit, parser-reproducible]
     runs-on: ubuntu-latest
     environment: release
     permissions:

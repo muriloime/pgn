@@ -1,10 +1,11 @@
 name: Release
 
 # Auto-releases on any push to `main` whose version (lib/pgn/version.rb) does
-# not yet have a matching `v<x.y.z>` tag. It gates on the RSpec matrix, then
-# creates the tag and pushes the gem to rubygems.org in this same workflow
-# (a tag pushed by the GITHUB_TOKEN does NOT trigger other workflows, so the
-# publish happens here directly to avoid that limitation).
+# not yet have a matching `v<x.y.z>` tag. It gates on the RSpec matrix,
+# RuboCop, bundler-audit, and the racc in-sync check, then creates the tag
+# and pushes the gem to rubygems.org in this same workflow (a tag pushed by
+# the GITHUB_TOKEN does NOT trigger other workflows, so the publish happens
+# here directly to avoid that limitation).
 #
 # Manual releases still work: `git tag vX.Y.Z && git push origin vX.Y.Z` fires
 # publish.yml (human-pushed tags do trigger workflows).
@@ -53,9 +54,51 @@ jobs:
           bundler-cache: true
       - run: bundle exec rspec
 
+  rubocop:
+    name: RuboCop
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - run: bundle exec rubocop -f github
+
+  bundle-audit:
+    name: Bundler-audit
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - run: bundle exec bundle-audit update
+      - run: bundle exec bundle-audit check
+
+  parser-reproducible:
+    name: Racc parser in sync with grammar
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - run: |
+          bundle exec racc -o /tmp/pgn_parser.check.rb lib/pgn/pgn_parser.y
+          diff -u lib/pgn/pgn_parser.rb /tmp/pgn_parser.check.rb
+
   release:
     name: Tag & publish
-    needs: [check, test]
+    needs: [check, test, rubocop, bundle-audit, parser-reproducible]
     if: needs.check.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     environment: release
