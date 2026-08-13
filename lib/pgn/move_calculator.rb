@@ -82,6 +82,11 @@ module PGN
       }
     }.freeze
 
+    # Frozen rook-origin -> castling-restriction lookup, shared by both
+    # white ('R') and black ('r') since their rook origins (a1/h1, a8/h8)
+    # are distinct keys. Replaces a per-call hash literal.
+    ROOK_RESTRICTIONS = { 'a1' => 'Q', 'h1' => 'K', 'a8' => 'q', 'h8' => 'k' }.freeze
+
     attr_accessor :board, :move, :origin
 
     # @param board [PGN::Board] the current board
@@ -114,9 +119,9 @@ module PGN
       when 'k'
         restrict += %w[k q]
       when 'R'
-        restrict << { 'a1' => 'Q', 'h1' => 'K' }[origin]
+        restrict << ROOK_RESTRICTIONS[origin]
       when 'r'
-        restrict << { 'a8' => 'q', 'h8' => 'k' }[origin]
+        restrict << ROOK_RESTRICTIONS[origin]
       end
 
       # when castling occurs
@@ -129,7 +134,7 @@ module PGN
       restrict << 'K' if move.destination == 'h1'
       restrict << 'k' if move.destination == 'h8'
 
-      restrict.compact.uniq
+      restrict.empty? ? restrict : restrict.compact.uniq
     end
 
     # @return [Boolean] whether to increment the halfmove clock
@@ -332,7 +337,7 @@ module PGN
     end
 
     def destination_coords
-      board.coordinates_for(move.destination)
+      @dest_coords ||= board.coordinates_for(move.destination)
     end
   end
 end

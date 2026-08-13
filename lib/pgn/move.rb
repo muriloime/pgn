@@ -105,7 +105,10 @@ module PGN
     end
 
     def piece=(val)
-      return if san.match('O-O')
+      # Castling SAN (O-O / O-O-O) has no piece attribute; the castle attribute
+      # is set later in #initialize. Use a non-allocating prefix check instead
+      # of `san.match('O-O')`, which allocated a MatchData on every Move.new.
+      return if san.start_with?('O')
 
       val ||= 'P'
       @piece = black? ? val.downcase : val
@@ -161,7 +164,7 @@ module PGN
     # @return [Boolean] whether the piece being moved is a pawn
     #
     def pawn?
-      %w[P p].include?(piece)
+      piece == 'P' || piece == 'p'
     end
   end
 end

@@ -8,7 +8,7 @@ require 'racc/parser.rb'
 module PGN
   class PgnParser < Racc::Parser
 
-module_eval(<<'...end pgn_parser.y/module_eval...', 'pgn_parser.y', 91)
+module_eval(<<'...end pgn_parser.y/module_eval...', 'pgn_parser.y', 97)
 
   def parse(input)
     @lexer = PGN::Lexer.new(input)
@@ -19,29 +19,21 @@ module_eval(<<'...end pgn_parser.y/module_eval...', 'pgn_parser.y', 91)
   end
 
   def next_token
-    t = @lexer.next_token
-    return [false, false] unless t
-    [translate_type(t.type), t.value]
+    pair = @lexer.next_token_pair
+    return [false, false] unless pair
+    type, value = pair
+    [translate_type(type), value]
   end
 
   private
 
+  # Punctuation tokens are racc'd by literal; everything else is racc'd by
+  # the upcased lexer symbol (e.g. :san_move -> :SAN_MOVE), so there's a
+  # single source of truth for the token vocabulary: PGN::Lexer's rules.
+  LITERAL_TOKENS = { lbracket: '[', rbracket: ']', lparen: '(', rparen: ')' }.freeze
+
   def translate_type(sym)
-    case sym
-    when :string           then :STRING
-    when :comment          then :COMMENT
-    when :game_termination  then :GAME_TERMINATION
-    when :san_move         then :SAN_MOVE
-    when :nag              then :NAG
-    when :move_number      then :MOVE_NUMBER
-    when :tag_name         then :TAG_NAME
-    when :lbracket         then '['
-    when :rbracket         then ']'
-    when :lparen           then '('
-    when :rparen           then ')'
-    else
-      raise "PGN::Lexer produced an unknown token type: #{sym.inspect}"
-    end
+    LITERAL_TOKENS[sym] || sym.to_s.upcase.to_sym
   end
 
   # Slice the verbatim raw PGN text per game out of the original input using
@@ -65,42 +57,42 @@ module_eval(<<'...end pgn_parser.y/module_eval...', 'pgn_parser.y', 91)
 ##### State transition tables begin ###
 
 racc_action_table = [
-     2,    16,     7,    17,    22,    14,     6,    24,    11,     6,
-    31,    16,    12,    17,    29,    14,    18,    30,    21,    25,
-    21,    24,    30 ]
+     2,    16,     7,    17,    23,    14,     6,    25,    11,     6,
+    32,    16,    12,    17,    30,    14,    18,    31,    21,    26,
+    21,    25,    31 ]
 
 racc_action_check = [
-     1,    27,     2,    27,    17,    27,     5,    17,     6,     1,
-    27,     9,     9,     9,    23,     9,    11,    23,    15,    18,
-    20,    22,    28 ]
+     1,    28,     2,    28,    17,    28,     5,    17,     6,     1,
+    28,     9,     9,     9,    24,     9,    11,    24,    15,    18,
+    20,    23,    29 ]
 
 racc_action_pointer = [
    nil,     0,     2,   nil,   nil,    -3,     0,   nil,   nil,     8,
    nil,    14,   nil,   nil,   nil,     7,   nil,     1,     9,   nil,
-     9,   nil,    15,    11,   nil,   nil,   nil,    -2,    16,   nil,
-   nil,   nil ]
+     9,   nil,   nil,    15,    11,   nil,   nil,   nil,    -2,    16,
+   nil,   nil,   nil ]
 
 racc_action_default = [
-    -1,   -24,   -24,    -2,    -8,    -4,   -24,    32,    -3,   -24,
-    -5,   -24,    -7,    -9,   -10,   -11,   -13,   -14,   -24,   -12,
-   -21,    -8,   -15,   -16,   -19,    -6,   -22,   -24,   -18,   -17,
-   -20,   -23 ]
+    -1,   -25,   -25,    -2,    -8,    -4,   -25,    33,    -3,   -25,
+    -5,   -25,    -7,    -9,   -10,   -11,   -13,   -14,   -25,   -12,
+   -22,    -8,   -15,   -16,   -17,   -20,    -6,   -23,   -25,   -19,
+   -18,   -21,   -24 ]
 
 racc_goto_table = [
-     9,    19,    23,     1,     4,     3,    26,    28,    10,     8,
-   nil,   nil,   nil,   nil,   nil,   nil,   nil,    27 ]
+     9,    24,     4,    19,     1,     3,    10,    29,    27,     8,
+    22,   nil,   nil,   nil,   nil,   nil,   nil,    28 ]
 
 racc_goto_check = [
-     6,     9,    10,     1,     3,     2,     9,    10,     3,     4,
-   nil,   nil,   nil,   nil,   nil,   nil,   nil,     6 ]
+     6,    11,     3,     9,     1,     2,     3,    11,     9,     4,
+    10,   nil,   nil,   nil,   nil,   nil,   nil,     6 ]
 
 racc_goto_pointer = [
-   nil,     3,     4,     3,     5,   nil,    -4,   nil,   nil,   -14,
-   -15,   nil ]
+   nil,     4,     4,     1,     5,   nil,    -4,   nil,   nil,   -12,
+    -7,   -16,   nil ]
 
 racc_goto_default = [
    nil,   nil,   nil,   nil,   nil,     5,   nil,    13,    15,   nil,
-   nil,    20 ]
+   nil,   nil,    20 ]
 
 racc_reduce_table = [
   0, 0, :racc_error,
@@ -119,18 +111,19 @@ racc_reduce_table = [
   1, 20, :_reduce_13,
   1, 21, :_reduce_14,
   2, 21, :_reduce_15,
-  2, 21, :_reduce_16,
-  3, 21, :_reduce_17,
-  3, 21, :_reduce_18,
-  1, 23, :_reduce_19,
-  2, 23, :_reduce_20,
-  1, 22, :_reduce_21,
-  2, 22, :_reduce_22,
-  3, 24, :_reduce_23 ]
+  1, 23, :_reduce_16,
+  1, 23, :_reduce_17,
+  2, 23, :_reduce_18,
+  2, 23, :_reduce_19,
+  1, 24, :_reduce_20,
+  2, 24, :_reduce_21,
+  1, 22, :_reduce_22,
+  2, 22, :_reduce_23,
+  3, 25, :_reduce_24 ]
 
-racc_reduce_n = 24
+racc_reduce_n = 25
 
-racc_shift_n = 32
+racc_shift_n = 33
 
 racc_token_table = {
   false => 0,
@@ -192,6 +185,7 @@ Racc_token_to_s_table = [
   "element",
   "san_move_annotated",
   "variation_list",
+  "move_trailer",
   "annotation_list",
   "variation" ]
 Ractor.make_shareable(Racc_token_to_s_table) if defined?(Ractor)
@@ -202,21 +196,21 @@ Racc_debug_parser = false
 
 # reduce 0 omitted
 
-module_eval(<<'.,.,', 'pgn_parser.y', 7)
+module_eval(<<'.,.,', 'pgn_parser.y', 9)
   def _reduce_1(val, _values, result)
      result = []
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 8)
+module_eval(<<'.,.,', 'pgn_parser.y', 10)
   def _reduce_2(val, _values, result)
      result = val[0] << val[1]
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 13)
+module_eval(<<'.,.,', 'pgn_parser.y', 15)
   def _reduce_3(val, _values, result)
             result = val[1].pop
         result = {
@@ -231,14 +225,14 @@ module_eval(<<'.,.,', 'pgn_parser.y', 13)
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 24)
+module_eval(<<'.,.,', 'pgn_parser.y', 26)
   def _reduce_4(val, _values, result)
      result = val[0]
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 27)
+module_eval(<<'.,.,', 'pgn_parser.y', 29)
   def _reduce_5(val, _values, result)
             # Right-recursive with section.merge(pair) reproduces the legacy
         # whittle parser's tag semantics exactly: reverse source insertion
@@ -250,28 +244,28 @@ module_eval(<<'.,.,', 'pgn_parser.y', 27)
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 35)
+module_eval(<<'.,.,', 'pgn_parser.y', 37)
   def _reduce_6(val, _values, result)
      result = { val[1] => val[2][1...-1] }
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 38)
+module_eval(<<'.,.,', 'pgn_parser.y', 40)
   def _reduce_7(val, _values, result)
      result = val[0] << val[1]
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 41)
+module_eval(<<'.,.,', 'pgn_parser.y', 43)
   def _reduce_8(val, _values, result)
      result = []
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 44)
+module_eval(<<'.,.,', 'pgn_parser.y', 46)
   def _reduce_9(val, _values, result)
             result = val[1].nil? ? val[0] : val[0] << val[1]
 
@@ -279,7 +273,7 @@ module_eval(<<'.,.,', 'pgn_parser.y', 44)
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 48)
+module_eval(<<'.,.,', 'pgn_parser.y', 50)
   def _reduce_10(val, _values, result)
      result = nil
     result
@@ -288,7 +282,7 @@ module_eval(<<'.,.,', 'pgn_parser.y', 48)
 
 # reduce 11 omitted
 
-module_eval(<<'.,.,', 'pgn_parser.y', 52)
+module_eval(<<'.,.,', 'pgn_parser.y', 54)
   def _reduce_12(val, _values, result)
             result = val[0]
         result.variations = val[1]
@@ -298,7 +292,7 @@ module_eval(<<'.,.,', 'pgn_parser.y', 52)
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 58)
+module_eval(<<'.,.,', 'pgn_parser.y', 60)
   def _reduce_13(val, _values, result)
             # A standalone comment (not attached to a move) becomes the game
         # comment; the last such comment in the game wins.
@@ -309,64 +303,71 @@ module_eval(<<'.,.,', 'pgn_parser.y', 58)
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 65)
+module_eval(<<'.,.,', 'pgn_parser.y', 67)
   def _reduce_14(val, _values, result)
      result = MoveText.new(val[0])
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 66)
-  def _reduce_15(val, _values, result)
-     result = MoveText.new(val[0], nil, val[1])
-    result
-  end
-.,.,
-
-module_eval(<<'.,.,', 'pgn_parser.y', 67)
-  def _reduce_16(val, _values, result)
-     result = MoveText.new(val[0], val[1])
-    result
-  end
-.,.,
-
 module_eval(<<'.,.,', 'pgn_parser.y', 68)
-  def _reduce_17(val, _values, result)
-     result = MoveText.new(val[0], val[1], val[2])
-    result
-  end
-.,.,
-
-module_eval(<<'.,.,', 'pgn_parser.y', 69)
-  def _reduce_18(val, _values, result)
-     result = MoveText.new(val[0], val[2], val[1])
+  def _reduce_15(val, _values, result)
+     result = MoveText.new(val[0], *val[1])
     result
   end
 .,.,
 
 module_eval(<<'.,.,', 'pgn_parser.y', 72)
-  def _reduce_19(val, _values, result)
-     result = [val[0]]
+  def _reduce_16(val, _values, result)
+     result = [nil, val[0]]
     result
   end
 .,.,
 
 module_eval(<<'.,.,', 'pgn_parser.y', 73)
-  def _reduce_20(val, _values, result)
-     result = val[0] << val[1]
+  def _reduce_17(val, _values, result)
+     result = [val[0], nil]
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 76)
-  def _reduce_21(val, _values, result)
+module_eval(<<'.,.,', 'pgn_parser.y', 74)
+  def _reduce_18(val, _values, result)
+     result = [val[0], val[1]]
+    result
+  end
+.,.,
+
+module_eval(<<'.,.,', 'pgn_parser.y', 75)
+  def _reduce_19(val, _values, result)
+     result = [val[1], val[0]]
+    result
+  end
+.,.,
+
+module_eval(<<'.,.,', 'pgn_parser.y', 78)
+  def _reduce_20(val, _values, result)
      result = [val[0]]
     result
   end
 .,.,
 
 module_eval(<<'.,.,', 'pgn_parser.y', 79)
+  def _reduce_21(val, _values, result)
+     result = val[0] << val[1]
+    result
+  end
+.,.,
+
+module_eval(<<'.,.,', 'pgn_parser.y', 82)
   def _reduce_22(val, _values, result)
+     result = [val[0]]
+    result
+  end
+.,.,
+
+module_eval(<<'.,.,', 'pgn_parser.y', 85)
+  def _reduce_23(val, _values, result)
             # Right-recursive prepend reproduces the legacy whittle parser's
         # variation-order reversal on every parse. This keeps parsed-game
         # serialization byte-compatible with the legacy behavior; the quirk
@@ -377,8 +378,8 @@ module_eval(<<'.,.,', 'pgn_parser.y', 79)
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 87)
-  def _reduce_23(val, _values, result)
+module_eval(<<'.,.,', 'pgn_parser.y', 93)
+  def _reduce_24(val, _values, result)
      result = val[1]
     result
   end

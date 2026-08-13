@@ -73,3 +73,71 @@ inputs during the migration; 32 explicit parser specs now pin the behavior
 permanently (`spec/parser_explicit_spec.rb`).
 
 Full suite: 187 examples, 0 failures.
+
+## Quick wins (Approach A) — 2026-08-13
+
+Safe, behavior-compatible micro-optimizations on top of the Racc parser.
+Spec: `docs/superpowers/specs/2026-08-13-pgn-performance-quick-wins-design.md`.
+"BEFORE" = `bench/baseline_*.pre-quickwins.txt` (working tree immediately before
+this change). "AFTER" = `bench/baseline_*.txt`.
+
+### bench/profile_moves.rb (immortal game, 45 plies)
+
+| Metric | BEFORE | AFTER | Δ |
+|---|---|---|---|
+| Replay allocations (objects) | 2177 | 1710 | -467 (-21.4%) |
+| Replay allocations (bytes) | 141616 | 103760 | -37856 (-26.7%) |
+| Replay throughput (µs/i) | 931.70 | 848.64 | -83.06 (-8.9%) |
+
+### bench/profile_parse.rb (500 immortal games)
+
+| Metric | BEFORE | AFTER | Δ |
+|---|---|---|---|
+| Parse-only allocations (objects) | 626037 | 603537 | -22500 (-3.6%) |
+| Parse-only allocations (bytes) | 39417414 | 28257414 | -11160000 (-28.3%) |
+| Parse-only throughput (ms/i) | 318.39 | 274.08 | -44.31 (-13.9%) |
+| Parse + replay allocations (objects) | 1683087 | 1427586 | -255501 (-15.2%) |
+| Parse + replay allocations (bytes) | 108184152 | 78104136 | -30080016 (-27.8%) |
+| Parse + replay throughput (ms/i) | 795.32 | 715.05 | -80.27 (-10.1%) |
+
+### Changes applied
+
+1. `PGN::Lexer` — added `next_token_pair` (returns `[type, value]`, no `Token`
+   Struct) built on a shared private `scan_next` routine that preserves the
+   `note_token`/`advance_line`/`game_starts` side effects. `next_token`/`tokens`
+   unchanged. `PgnParser#next_token` (in `.y` and generated `.rb`) now uses
+   `next_token_pair`. Eliminates the per-token `Token` Struct + its
+   `keyword_init` Hash (the larger win in bytes).
+2. `PGN::Game#moves=` — reuses an existing `MoveText` directly when its comment
+   is already fully cleaned (nil or brace-free); still re-wraps (preserving the
+   legacy double-`clean_text` for multi-line/nested comments) when the comment
+   carries braces. Halves `MoveText` allocations on the parse path for
+   comment-free corpora.
+3. `PGN::Move#piece=` — replaced the per-`Move.new` `san.match('O-O')` guard
+   (allocated a `MatchData` on every move, castling or not) with a
+   non-allocating `san.start_with?('O')`. The full hand-rolled SAN parser was
+   **deferred** per the spec's "measure first; defer if marginal" guidance:
+   it would save only ~1 `MatchData`/ply (~2% of replay, ~1.3% of parse+replay)
+   at high risk to SAN edge cases.
+4. `PGN::Position#next_player` — `(PLAYERS - [player]).first` →
+   `player == :white ? :black : :white` (removes 2 array allocations/ply).
+   `Position#move` — skips `castling - restrictions` when `restrictions` is
+   empty (returns the shared `castling` array; safe because castling arrays
+   are replaced, never mutated).
+   `PGN::MoveCalculator` — memoizes `destination_coords` (was recomputed 2–3
+   times/move, each allocating a 2-element array); frozen `ROOK_RESTRICTIONS`
+   constant replaces per-call hash literals in `castling_restrictions`; empty
+   short-circuit avoids `compact.uniq` on the common empty path.
+   `PGN::Move#pawn?` — `%w[P p].include?` → `piece == 'P' || piece == 'p'`.
+   `valid_square?` was left unchanged: its `(0..7)` are frozen range literals
+   cached by the VM, so inlining would only save method dispatch, not
+   allocations (the original rationale was unfounded).
+
+### Behavior preservation
+
+All 182 specs pass unmodified (`bundle exec rspec`). The lexer refactor keeps
+`next_token`/`tokens` and the `game_starts`-driven verbatim `Game#pgn` slicing
+byte-identical (covered by `spec/lexer_spec.rb`, `spec/parser_explicit_spec.rb`,
+and the fixture round-trip in `spec/game_spec.rb`). Racc parser is in sync with
+`pgn_parser.y` (CI racc-sync check passes). No public API or serialized-output
+changes.

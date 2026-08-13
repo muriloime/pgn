@@ -77,15 +77,26 @@ module PGN
     #
     # Standardize castling moves to use O's instead of 0's
     #
+    # Reuse-safety invariant: when an element is already a MoveText we reuse
+    # it directly (sharing one object between the parser's move tree and
+    # Game#moves) whenever its comment is already fully cleaned. This is safe
+    # because nothing mutates a MoveText after this assignment returns. We
+    # still re-wrap when the comment carries braces: the parser's single-pass
+    # clean_text leaves braces on multi-line/nested comments, and the second
+    # clean_text that MoveText.new applies here is load-bearing for those
+    # (matches the legacy whittle byte-output). Skipping it would change
+    # serialized comments.
     def moves=(moves)
       @moves =
         moves.map do |m|
-          if m.is_a? String
+          if m.is_a?(String)
             MoveText.new(m.include?('0') ? m.gsub('0', 'O') : m)
+          elsif m.notation.include?('0')
+            MoveText.new(m.notation.gsub('0', 'O'), m.annotation, m.comment, m.variations)
+          elsif m.comment.nil? || !m.comment.include?('{')
+            m
           else
-            notation = m.notation
-            notation = notation.gsub('0', 'O') if notation.include?('0')
-            MoveText.new(notation, m.annotation, m.comment, m.variations)
+            MoveText.new(m.notation, m.annotation, m.comment, m.variations)
           end
         end
     end

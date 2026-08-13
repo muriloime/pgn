@@ -164,24 +164,24 @@ Move pipeline — immortal game, 45 plies (`bench/profile_moves.rb`):
 
 | Metric | original `pgn` | pgn2 | Δ |
 |---|---:|---:|---:|
-| Replay allocations (objects) | 5124 | 2565 | -2559 (-50.0%) |
-| Replay allocations (bytes) | 262608 | 155296 | -107312 (-40.9%) |
-| `Board#dup` x45 (objects) | 451 | 91 | -360 (-79.8%) |
-| `Board#dup` x45 (bytes) | 43096 | 6736 | -36360 (-84.4%) |
+| Replay allocations (objects) | 5124 | 1710 | -3414 (-66.7%) |
+| Replay allocations (bytes) | 262608 | 103760 | -158848 (-60.5%) |
+| `Board#dup` x45 (objects) | 451 | 136 | -315 (-69.8%) |
+| `Board#dup` x45 (bytes) | 43096 | 10336 | -32760 (-76.0%) |
 | `Board#at(str)` x1000 (objects) | 6000 | 0 | -6000 (-100%) |
 | `Board#at(str)` x1000 (bytes) | 240000 | 0 | -240000 (-100%) |
-| Replay throughput | 1.132k ips (884 µs/i) | 1.669k ips (599 µs/i) | ~1.5x faster |
+| Replay throughput | 1.132k ips (884 µs/i) | 1.178k ips (849 µs/i) | ~1.04x faster |
 
 Parser — 500 immortal games (`bench/profile_parse.rb`):
 
 | Metric | original `pgn` | pgn2 | Δ |
 |---|---:|---:|---:|
-| Parse-only allocations (objects) | 1248065 | 557035 | -691030 (-55.4%) |
-| Parse-only allocations (bytes) | 120370470 | 36636902 | -83733568 (-69.6%) |
-| Parse + replay allocations (objects) | 3778073 | 1614087 | -2163986 (-57.3%) |
-| Parse + replay allocations (bytes) | 249570048 | 105404152 | -144165896 (-57.7%) |
-| Parse-only throughput | 1.513 ips (661 ms/i) | 4.711 ips (212 ms/i) | ~3.1x faster |
-| Parse + replay throughput | 0.933 ips (1070 ms/i) | 2.698 ips (371 ms/i) | ~2.9x faster |
+| Parse-only allocations (objects) | 1248065 | 603537 | -644528 (-51.6%) |
+| Parse-only allocations (bytes) | 120370470 | 28257414 | -92113056 (-76.5%) |
+| Parse + replay allocations (objects) | 3778073 | 1427586 | -2350487 (-62.2%) |
+| Parse + replay allocations (bytes) | 249570048 | 78104136 | -171465912 (-68.7%) |
+| Parse-only throughput | 1.513 ips (661 ms/i) | 3.649 ips (274 ms/i) | ~2.4x faster |
+| Parse + replay throughput | 0.933 ips (1070 ms/i) | 1.399 ips (715 ms/i) | ~1.5x faster |
 
 What changed to get there:
 
@@ -193,9 +193,22 @@ What changed to get there:
 6. Parser — `whittle` (≈80% of parse allocations) replaced by stdlib `Racc` +
    `StringScanner`; `PGN::Game#pgn` sliced from per-game byte offsets (no O(n²)
    `@@pgn +=` accumulation).
+7. `PGN::Lexer#next_token_pair` — parser hot path returns `[type, value]`
+   without allocating a `Token` Struct (or its `keyword_init` Hash), via a
+   shared scanning routine that preserves `game_starts` for verbatim `pgn` slicing.
+8. `PGN::Game#moves=` — reuse existing `MoveText` when its comment is already
+   clean; halve `MoveText` allocations on the parse path (still re-wraps to
+   preserve the legacy double-`clean_text` for multi-line/nested comments).
+9. `PGN::Move#piece=` — non-allocating castling guard (`start_with?('O')`
+   instead of `match('O-O')`), removing a `MatchData` from every `Move.new`.
+10. `PGN::Position#next_player` — ternary instead of `(PLAYERS - [player])`;
+    `Position#move` skips `castling - restrictions` when there are none.
+11. `PGN::MoveCalculator` — memoized `destination_coords`, frozen
+    `ROOK_RESTRICTIONS`, empty short-circuit in `castling_restrictions`;
+    `Move#pawn?` non-allocating.
 
 Public output (FEN, PGN) is byte-identical to the original gem; the full
-suite (187 examples) stays green. See `bench/IMPROVEMENTS.md` for the per-step
+suite (182 examples) stays green. See `bench/IMPROVEMENTS.md` for the per-step
 before/after deltas that produced these tables.
 
 ## Installation

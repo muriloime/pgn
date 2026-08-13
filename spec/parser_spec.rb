@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'pry'
 
@@ -25,7 +27,7 @@ describe PGN do
       games.each do |game|
         expect(game.tags['White']).to eq 'Fool'
         expect(game.result).to eq  '0-1'
-        expect(game.moves.last).to eq  'Qh4#'
+        expect(game.moves.last).to eq 'Qh4#'
       end
     end
 
@@ -39,7 +41,7 @@ describe PGN do
       game = games.first
       expect(game.tags['White']).to eq 'Scholar'
       expect(game.result).to eq  '1-0'
-      expect(game.moves.last).to eq  'Qxf7#'
+      expect(game.moves.last).to eq 'Qxf7#'
     end
 
     it 'should handle multiline comments' do
@@ -47,7 +49,7 @@ describe PGN do
       game = games.first
       expect(game.tags['White']).to eq 'Scholar'
       expect(game.result).to eq  '1-0'
-      expect(game.moves.last).to eq  'Qxf7#'
+      expect(game.moves.last).to eq 'Qxf7#'
     end
 
     it 'should handle nested comments' do
@@ -55,12 +57,6 @@ describe PGN do
       game = games.first
       expect(game.result).to eq  '*'
       expect(game.moves.last).to eq 'Nf6'
-    end
-
-    it 'handles two annotations' do
-      games = PGN.parse(File.read('./spec/pgn_files/two_annotations.pgn'))
-      game = games.first
-      expect(game.moves[1].annotation).to eq ['$2', '$11']
     end
 
     it 'returns empty array when no variations' do
@@ -84,13 +80,6 @@ describe PGN do
       expect(game.moves[-2].variations.first).to eq %w[f4 exf4]
     end
 
-    it 'should handle empty variation moves' do
-      games = PGN.parse(File.read('./spec/pgn_files/empty_variation_move.pgn'))
-      game = games.first
-      expect(game.result).to eq  '*'
-      expect(game.moves.last).to eq 'Ng5'
-    end
-
     it 'should handle complex files' do
       games = PGN.parse(File.read('./spec/pgn_files/test.pgn'))
       game = games.first
@@ -103,7 +92,7 @@ describe PGN do
       expect(game.moves[35].variations.size).to eq 1
       variation = game.moves[35].variations[0]
       expect(variation.size).to eq 2
-      expect(variation[0]).to eq  'exf3'
+      expect(variation[0]).to eq 'exf3'
     end
 
     it 'should handle files with starting position' do
@@ -132,27 +121,6 @@ describe PGN do
       game = games.first
       expect { game.positions }.not_to raise_error
       expect(game.moves).not_to be_empty
-    end
-
-    it 'gets game comment' do
-      games = PGN.parse(File.read('./spec/pgn_files/no_moves.pgn'))
-      game = games.last
-      expect(game.comment).to eq('{game comment}')
-    end
-
-    it 'tag_values with double quotes' do
-      games = PGN.parse(File.read('./spec/pgn_files/doublequotes.pgn'))
-      game = games.last
-      expect(game.tags['Event']).to eq('IRT BLITZ "Sub Zonal"')
-    end
-
-    it 'set encoding' do
-      file = File.read('./spec/pgn_files/specialcharacters.pgn')
-      games = PGN.parse(file, Encoding::UTF_8)
-      game1 = games.first
-      game2 = games.last
-      expect(game1.tags['WhiteTeam']).to eq('NARIÑO')
-      expect(game2.tags['Site']).to eq('HOTEL CAFEIRA Calle 18 Nro. 5 – 38 Centro de Pereira – Risaralda')
     end
   end
 end

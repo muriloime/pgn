@@ -81,7 +81,8 @@ module PGN
       move       = PGN::Move.new(str, player)
       calculator = PGN::MoveCalculator.new(board, move)
 
-      new_castling = castling - calculator.castling_restrictions
+      restrictions = calculator.castling_restrictions
+      new_castling = restrictions.empty? ? castling : castling - restrictions
       new_halfmove = if calculator.increment_halfmove?
                        halfmove + 1
                      else
@@ -106,7 +107,7 @@ module PGN
     # @return [Symbol] the next player to move
     #
     def next_player
-      (PLAYERS - [player]).first
+      player == :white ? :black : :white
     end
 
     def inspect

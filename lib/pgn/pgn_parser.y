@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class PGN::PgnParser
 
 token STRING COMMENT GAME_TERMINATION SAN_MOVE NAG MOVE_NUMBER TAG_NAME
@@ -64,10 +66,14 @@ rule
 
   san_move_annotated:
       SAN_MOVE                            { result = MoveText.new(val[0]) }
-    | SAN_MOVE COMMENT                    { result = MoveText.new(val[0], nil, val[1]) }
-    | SAN_MOVE annotation_list            { result = MoveText.new(val[0], val[1]) }
-    | SAN_MOVE annotation_list COMMENT    { result = MoveText.new(val[0], val[1], val[2]) }
-    | SAN_MOVE COMMENT annotation_list   { result = MoveText.new(val[0], val[2], val[1]) }
+    | SAN_MOVE move_trailer                { result = MoveText.new(val[0], *val[1]) }
+
+  # [annotation_list, comment], in whichever order they followed the move.
+  move_trailer:
+      COMMENT                             { result = [nil, val[0]] }
+    | annotation_list                      { result = [val[0], nil] }
+    | annotation_list COMMENT              { result = [val[0], val[1]] }
+    | COMMENT annotation_list              { result = [val[1], val[0]] }
 
   annotation_list:
       NAG                                 { result = [val[0]] }
@@ -98,29 +104,21 @@ rule
   end
 
   def next_token
-    t = @lexer.next_token
-    return [false, false] unless t
-    [translate_type(t.type), t.value]
+    pair = @lexer.next_token_pair
+    return [false, false] unless pair
+    type, value = pair
+    [translate_type(type), value]
   end
 
   private
 
+  # Punctuation tokens are racc'd by literal; everything else is racc'd by
+  # the upcased lexer symbol (e.g. :san_move -> :SAN_MOVE), so there's a
+  # single source of truth for the token vocabulary: PGN::Lexer's rules.
+  LITERAL_TOKENS = { lbracket: '[', rbracket: ']', lparen: '(', rparen: ')' }.freeze
+
   def translate_type(sym)
-    case sym
-    when :string           then :STRING
-    when :comment          then :COMMENT
-    when :game_termination  then :GAME_TERMINATION
-    when :san_move         then :SAN_MOVE
-    when :nag              then :NAG
-    when :move_number      then :MOVE_NUMBER
-    when :tag_name         then :TAG_NAME
-    when :lbracket         then '['
-    when :rbracket         then ']'
-    when :lparen           then '('
-    when :rparen           then ')'
-    else
-      raise "PGN::Lexer produced an unknown token type: #{sym.inspect}"
-    end
+    LITERAL_TOKENS[sym] || sym.to_s.upcase.to_sym
   end
 
   # Slice the verbatim raw PGN text per game out of the original input using

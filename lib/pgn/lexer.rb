@@ -24,10 +24,10 @@ module PGN
     end
 
     # Discarded: insignificant whitespace.
-    WSP = /\s+/.freeze
+    WSP = /\s+/
 
     # Discarded: a PGN "rest of line" comment beginning with `%`.
-    PGN_COMMENT = /% .*/.freeze
+    PGN_COMMENT = /% .*/
 
     # A tag value string. Allows unescaped double-quotes inside the value
     # (a form seen in real-world PGN files) — only a bare backslash starts
@@ -40,14 +40,14 @@ module PGN
         \\"                      # escaped quotation marks
       )*                         # zero or more of the above
       "                          # end of string
-    /x.freeze
+    /x
 
     # A brace-delimited comment, with recursive nesting via \g<1>.
     COMMENT = /
       (
         \{                           # beginning of comment
         (
-          [[:print:]&&[^\\\{\}]] |   # printing characters except brace and backslash
+          [[:print:]&&[^\\{}]] |   # printing characters except brace and backslash
           \n                     |
           \\\\                   |   # escaped backslashes
           \\\{|\\\}              |   # escaped braces
@@ -56,15 +56,15 @@ module PGN
         )*                           # zero or more of the above
           \}                           # end of comment
       )
-    /x.freeze
+    /x
 
     # Game termination marker.
     GAME_TERMINATION = %r{
       1-0       |    # white wins
       0-1       |    # black wins
-      1\/2-1\/2 |    # draw
+      1/2-1/2 |    # draw
       \*             # ?
-    }x.freeze
+    }x
 
     # A move in standard algebraic notation (incl. castling, promotion,
     # check/mate, the `--` "don't care" move).
@@ -83,43 +83,46 @@ module PGN
         \+                            |    # check (g5+)
         \#                                 # checkmate (Qe7#)
       )?
-    }x.freeze
+    }x
 
     # A move number indication, e.g. `1.`, `12.`, `1...`.
-    MOVE_NUMBER = /[[:digit:]]+\.*/.freeze
+    MOVE_NUMBER = /[[:digit:]]+\.*/
 
     # A tag name (letters, digits, underscores).
-    TAG_NAME = /[A-Za-z0-9_]+/.freeze
+    TAG_NAME = /[A-Za-z0-9_]+/
 
     # A numeric annotation glyph (`$1`) or a punctuation annotation (`?!`,
     # `!?`, `??`, ...).
     NAG = /
       \$\d+       | # dollar sign followed by an integer
-      [\?!][\?!]?   # support the most used annotations directly
-    /x.freeze
+      [?!][?!]?   # support the most used annotations directly
+    /x
 
     # Order matters: more specific / longer tokens are tried first so that
     # e.g. `1-0` (termination) wins over `1` (move number), and `0-0`
     # (castling) wins over `0` (move number). Whitespace and `%` comments
-    # are discarded (consumed but not emitted).
+    # are discarded (consumed but not emitted). Beyond that constraint,
+    # rules are ordered most- to least-frequent (one san_move/move_number
+    # per ply/full-move vs. a handful of comments/strings per game) so the
+    # common case fails the fewest regexes before matching.
     RULES = [
       [:wsp,              WSP,              true],   # discarded
       [:pgn_comment,      PGN_COMMENT,      true],   # discarded
-      [:comment,          COMMENT,          false],
-      [:string,           STRING,           false],
       [:game_termination, GAME_TERMINATION, false],
       [:san_move,         SAN_MOVE,         false],
-      [:nag,              NAG,              false],
       [:move_number,      MOVE_NUMBER,      false],
-      [:tag_name,         TAG_NAME,         false],
+      [:nag,              NAG,              false],
+      [:comment,          COMMENT,          false],
+      [:string,           STRING,           false],
+      [:tag_name,         TAG_NAME,         false]
     ].freeze.each(&:freeze)
 
-    # Single-character literals, matched by their byte value.
+    # Single-character literals, matched by their byte value: [type, frozen value].
     LITERAL_BYTES = {
-      91 => :lbracket,   # [
-      93 => :rbracket,   # ]
-      40 => :lparen,     # (
-      41 => :rparen,     # )
+      91 => [:lbracket, '['], # [
+      93 => [:rbracket, ']'], # ]
+      40 => [:lparen,   '('], # (
+      41 => [:rparen,   ')'] # )
     }.freeze
 
     def initialize(input)
@@ -127,7 +130,7 @@ module PGN
       @ss = StringScanner.new(input)
       @line = 1
       @game_starts = []
-      @between_games = true   # at start we are "between" games
+      @between_games = true # at start we are "between" games
     end
 
     attr_reader :game_starts
@@ -143,36 +146,55 @@ module PGN
 
     # Returns the next {Token}, or +nil+ at end of input.
     def next_token
-      until @ss.eos?
-        off = @ss.pos
+      type, value, off = scan_next
+      return nil unless type
+      Token.new(type: type, value: value, offset: off, line: @line)
+    end
 
-        if (lit = LITERAL_BYTES[@input.getbyte(off)])
-          @ss.pos = off + 1
-          note_token(lit, off)
-          return Token.new(type: lit, value: @input.byteslice(off, 1),
-                           offset: off, line: @line)
-        end
-
-        type, value = scan_one
-        advance_line(value)
-        if type == :wsp || type == :pgn_comment
-          # discarded: keep looping without emitting
-          next
-        end
-        note_token(type, off)
-        return Token.new(type: type, value: value, offset: off, line: @line)
-      end
-      nil
+    # Fast path for the parser: returns [type, value] for the next
+    # non-discarded token, or +nil+ at end of input. Does not allocate a
+    # {Token} Struct. Shares the same scanning routine and the same
+    # +note_token+ / +advance_line+ side effects as +next_token+ (so
+    # +game_starts+ tracking is preserved).
+    def next_token_pair
+      type, value, = scan_next
+      return nil unless type
+      [type, value]
     end
 
     private
 
-    # Try each terminal rule in order; return [type, matched_string] for
-    # the first match, or raise if nothing matches at the current position.
+    # Scan to the next non-discarded token and return [type, value, offset],
+    # or nil at end of input. Performs the exact +advance_line+ and
+    # +note_token+ side effects that +next_token+ historically did, so
+    # +game_starts+ (used for verbatim +Game#pgn+ slicing) stays correct.
+    def scan_next
+      until @ss.eos?
+        off = @ss.pos
+
+        if (lit = LITERAL_BYTES[@input.getbyte(off)])
+          type, value = lit
+          @ss.pos = off + 1
+          note_token(type, off)
+          return [type, value, off]
+        end
+
+        type, value, discarded = scan_one
+        advance_line(value)
+        next if discarded
+
+        note_token(type, off)
+        return [type, value, off]
+      end
+      nil
+    end
+
+    # Try each terminal rule in order; return [type, matched_string, discarded]
+    # for the first match, or raise if nothing matches at the current position.
     def scan_one
-      RULES.each do |(type, re, _discarded)|
+      RULES.each do |(type, re, discarded)|
         if (m = @ss.scan(re))
-          return [type, m]
+          return [type, m, discarded]
         end
       end
       raise UnconsumedInputError,
