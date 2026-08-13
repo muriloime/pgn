@@ -191,7 +191,7 @@ module PGN
 
       possibilities = case move.piece
                       when 'B', 'R', 'Q', 'b', 'r', 'q' then direction_origins
-                      when 'K', 'N', 'k', 'n' then move_origins
+                      when 'K', 'N', 'k', 'n' then leaper_origins
                       when 'P', 'p' then pawn_origins
                       else # don't care move, used in variations
                         return nil
@@ -234,6 +234,18 @@ module PGN
         possibilities << target if board.at_index(target) == move.piece
       end
 
+      possibilities
+    end
+
+    # Knight/king origins use the precomputed on-board attack masks on
+    # {PGN::Board}, skipping the per-call off-board test.
+    def leaper_origins
+      dest  = dest_idx
+      mask  = move.piece.upcase == 'N' ? Board::KNIGHT_ATTACKS[dest] : Board::KING_ATTACKS[dest]
+      piece = move.piece
+
+      possibilities = []
+      mask.each { |t| possibilities << t if board.at_index(t) == piece }
       possibilities
     end
 
