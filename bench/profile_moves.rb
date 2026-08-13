@@ -50,4 +50,23 @@ Benchmark.ips do |x|
   end
 end
 
+# --- 5. FEN generation (target of the direct-0x88 FEN builder) -------------
+positions = GAME.first.positions
+
+fen_report = MemoryProfiler.report do
+  positions.each { |p| p.to_fen.to_s }
+end
+
+puts "\n=== 5. FEN generation x#{positions.length} (target of direct-0x88 FEN) ==="
+puts "total_allocated objects: #{fen_report.total_allocated}"
+puts "total_allocated bytes:   #{fen_report.total_allocated_memsize}"
+
+puts "\n=== 6. FEN throughput (ips) ==="
+Benchmark.ips do |x|
+  x.config(time: 5, warmup: 1)
+  x.report('fen immortal') do
+    positions.each { |p| p.to_fen.to_s }
+  end
+end
+
 puts "\nDone. Compare this file against bench/baseline_moves.txt after optimizations."
