@@ -19,6 +19,40 @@ describe PGN::Game do
     end
   end
 
+  describe '#each_position' do
+    it 'yields each position in order when given a block' do
+      game = PGN::Game.new(%w[e4 e5])
+      yielded = []
+      game.each_position { |p| yielded << p.to_fen.to_s }
+      expect(yielded).to eq(
+        [
+          PGN::Position.start.to_fen.to_s,
+          game.positions[1].to_fen.to_s,
+          game.positions[2].to_fen.to_s
+        ]
+      )
+    end
+
+    it 'returns an Enumerator when no block is given' do
+      game = PGN::Game.new(%w[e4 e5])
+      expect(game.each_position).to be_an(Enumerator)
+    end
+
+    it 'produces the same positions as #positions' do
+      game = PGN::Game.new(%w[e4 c5 Nf3])
+      expect(game.each_position.map { |p| p.to_fen.to_s })
+        .to eq(game.positions.map { |p| p.to_fen.to_s })
+    end
+
+    it 'does not materialize the full array when only the last is needed' do
+      moves = %w[e4 c5 Nf3 d6]
+      game  = PGN::Game.new(moves)
+      last = nil
+      game.each_position { |p| last = p }
+      expect(last.to_fen.to_s).to eq(game.positions.last.to_fen.to_s)
+    end
+  end
+
   describe '#to_pgn' do
     it 'returns a canonical PGN string ending with a newline' do
       game = PGN::Game.new(%w[e4 e5], { 'White' => 'A' }, '1-0')

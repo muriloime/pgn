@@ -106,16 +106,25 @@ module PGN
     # @return [Array<PGN::Position>] list of the {PGN::Position}s in the game
     #
     def positions
-      @positions ||= begin
-        position = starting_position
-        arr = [position]
-        moves.each do |move|
-          new_pos = position.move(move.notation)
-          arr << new_pos
-          position = new_pos
-        end
-        arr
+      @positions ||= each_position.to_a
+    end
+
+    # @return [Enumerator, self] with a block: yields each {PGN::Position}
+    #   in order (starting position, then one per move) and returns self.
+    #   Without a block: returns an Enumerator that yields the same.
+    #
+    # The replay loop is shared with {#positions} so eager and lazy paths
+    # produce identical position objects in identical order.
+    def each_position
+      return enum_for(:each_position) unless block_given?
+
+      position = starting_position
+      yield position
+      moves.each do |move|
+        position = position.move(move.notation)
+        yield position
       end
+      self
     end
 
     # @return [Array<String>] list of the fen representations of the positions
