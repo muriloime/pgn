@@ -50,13 +50,27 @@ module PGN
     A8 = 112
     H8 = 119
 
+    # King/rook landing squares for castling, named for readability in
+    # {CASTLING} below.
+    #
+    C1 = 2
+    D1 = 3
+    E1 = 4
+    F1 = 5
+    G1 = 6
+    C8 = 114
+    D8 = 115
+    E8 = 116
+    F8 = 117
+    G8 = 118
+
     # The squares to update for each castling move, keyed by 0x88 index.
     #
     CASTLING = {
-      'Q' => { A1 => nil, 2 => 'K', 3 => 'R', 4 => nil },
-      'K' => { 4 => nil, 5 => 'R', 6 => 'K', H1 => nil },
-      'q' => { A8 => nil, 114 => 'k', 115 => 'r', 116 => nil },
-      'k' => { 116 => nil, 117 => 'r', 118 => 'k', H8 => nil }
+      'Q' => { A1 => nil, C1 => 'K', D1 => 'R', E1 => nil },
+      'K' => { E1 => nil, F1 => 'R', G1 => 'K', H1 => nil },
+      'q' => { A8 => nil, C8 => 'k', D8 => 'r', E8 => nil },
+      'k' => { E8 => nil, F8 => 'r', G8 => 'k', H8 => nil }
     }.freeze
 
     # rook-origin (0x88 index) -> castling restriction it drops.
@@ -87,7 +101,7 @@ module PGN
     def origin
       return nil if @origin_idx.nil?
 
-      square_name(@origin_idx)
+      board.square_name(@origin_idx)
     end
 
     # @return [PGN::Board] the board after the move is made
@@ -215,7 +229,7 @@ module PGN
       possibilities = []
       offsets.each do |off|
         target = dest + off
-        next unless on_board?(target)
+        next unless board.on_board?(target)
 
         possibilities << target if board.at_index(target) == move.piece
       end
@@ -250,7 +264,7 @@ module PGN
       return possibilities unless move.disambiguation
 
       possibilities.select do |idx|
-        square_name(idx).match(move.disambiguation)
+        board.square_name(idx).match(move.disambiguation)
       end
     end
 
@@ -290,7 +304,7 @@ module PGN
     #
     def first_piece(idx, off)
       idx += off
-      while on_board?(idx)
+      while board.on_board?(idx)
         square = board.at_index(idx)
         return idx if square
 
@@ -332,14 +346,6 @@ module PGN
     end
 
     # -- 0x88 index helpers --------------------------------------------------
-
-    def on_board?(idx)
-      (idx & 0x88).zero? # rubocop:disable Style/BitwisePredicate
-    end
-
-    def square_name(idx)
-      board.position_for([idx & 0x0F, idx >> 4])
-    end
 
     def dest_idx
       @dest_idx ||= move.destination && board.index_of(move.destination)

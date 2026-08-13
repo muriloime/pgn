@@ -233,6 +233,25 @@ module PGN
       self
     end
 
+    # Whether a 0x88 index is on the board (see the class doc for the
+    # bitmask this tests).
+    #
+    # @param idx [Integer] a 0x88 square index
+    # @return [Boolean]
+    #
+    def on_board?(idx)
+      (idx & 0x88).zero? # rubocop:disable Style/BitwisePredicate
+    end
+
+    # The algebraic square name of a 0x88 index.
+    #
+    # @param idx [Integer] a 0x88 square index
+    # @return [String] e.g. "e4"
+    #
+    def square_name(idx)
+      INDEX_TO_FILE[idx & 0x0F] + INDEX_TO_RANK[idx >> 4]
+    end
+
     private
 
     def file_of(square)
