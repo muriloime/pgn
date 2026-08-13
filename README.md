@@ -1,7 +1,13 @@
 # PGN2
 
-This is a fork from [pgn](https://github.com/capicue/pgn) gem.
-A PGN parser and FEN generator for ruby.
+[![CI](https://github.com/muriloime/pgn/actions/workflows/ci.yml/badge.svg)](https://github.com/muriloime/pgn/actions/workflows/ci.yml)
+[![Gem Version](https://badge.fury.io/rb/pgn2.svg)](https://rubygems.org/gems/pgn2)
+
+A PGN parser and FEN generator for Ruby, with a serializer and an interactive
+play mode. The parser is built on the Ruby standard library (`Racc` +
+`StringScanner`) and has no native or third-party runtime dependencies.
+
+This is a fork of the [pgn](https://github.com/capicue/pgn) gem.
 
 ## Usage
 
@@ -74,6 +80,22 @@ game = PGN::Game.new(moves)
 Note that if you simply want an abstract syntax tree from the pgn file,
 you can use `PGN::Parser.parse`.
 
+### Serializing games
+
+A game round-trips to PGN text with `PGN::Game#to_pgn` (or `PGN::Serializer`):
+
+```
+> game.to_pgn
+=> "[Event \"?\"]\n[Site \"?\"]\n[White \"Adolf Anderssen\"]\n...\n1. e4 e5 2. Nf3 ... 1-0\n"
+
+> PGN.parse(game.to_pgn).first.result == game.result
+=> true
+```
+
+Comments, variations, annotations, the `FEN` starting position, and game
+comments are all serialized. See `spec/game_spec.rb` for the round-trip
+gate that exercises every fixture.
+
 ### Dealing with FEN strings
 
 [Forsyth Edwards Notation](http://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation)
@@ -142,7 +164,9 @@ Or install it yourself as:
 ## Contributing
 
 1. Fork it
-2. Create your feature branch (`git checkout -b my-new-feature`)
+2. Create your feature branch (`git checkout -b my-new-feature` from `main`)
 3. Commit your changes (`git commit -am 'Add some feature'`)
 4. Push to the branch (`git push origin my-new-feature`)
-5. Create new Pull Request
+5. Open a Pull Request against `main`
+
+See `CHANGELOG.md` for release history.
