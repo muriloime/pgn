@@ -30,7 +30,7 @@ module PGN
     # 0x88 single-step offsets for knight and king.
     #
     STEP = {
-      'k' => [-1, 1, -16, 16, -15, 15, -17, 17],
+      'k' => SLIDE['q'],
       'n' => [33, 31, -31, -33, 18, 14, -14, -18]
     }.freeze
 
@@ -42,15 +42,6 @@ module PGN
       'p' => { capture: [15, 17], normal: [16], double: [32] }
     }.freeze
 
-    # The squares to update for each castling move, keyed by 0x88 index.
-    #
-    CASTLING = {
-      'Q' => { 0 => nil, 2 => 'K', 3 => 'R', 4 => nil },
-      'K' => { 4 => nil, 5 => 'R', 6 => 'K', 7 => nil },
-      'q' => { 112 => nil, 114 => 'k', 115 => 'r', 116 => nil },
-      'k' => { 116 => nil, 117 => 'r', 118 => 'k', 119 => nil }
-    }.freeze
-
     # Corner-square 0x88 indices, used for castling-restriction bookkeeping
     # (a rook leaving or being captured on a corner drops the matching right).
     #
@@ -58,6 +49,15 @@ module PGN
     H1 = 7
     A8 = 112
     H8 = 119
+
+    # The squares to update for each castling move, keyed by 0x88 index.
+    #
+    CASTLING = {
+      'Q' => { A1 => nil, 2 => 'K', 3 => 'R', 4 => nil },
+      'K' => { 4 => nil, 5 => 'R', 6 => 'K', H1 => nil },
+      'q' => { A8 => nil, 114 => 'k', 115 => 'r', 116 => nil },
+      'k' => { 116 => nil, 117 => 'r', 118 => 'k', H8 => nil }
+    }.freeze
 
     # rook-origin (0x88 index) -> castling restriction it drops.
     #
@@ -87,7 +87,7 @@ module PGN
     def origin
       return nil if @origin_idx.nil?
 
-      board.position_for([@origin_idx & 0x0F, @origin_idx >> 4])
+      square_name(@origin_idx)
     end
 
     # @return [PGN::Board] the board after the move is made
@@ -215,7 +215,7 @@ module PGN
       possibilities = []
       offsets.each do |off|
         target = dest + off
-        next unless (target & 0x88).zero? # rubocop:disable Style/BitwisePredicate
+        next unless on_board?(target)
 
         possibilities << target if board.at_index(target) == move.piece
       end
@@ -250,7 +250,7 @@ module PGN
       return possibilities unless move.disambiguation
 
       possibilities.select do |idx|
-        board.position_for([idx & 0x0F, idx >> 4]).match(move.disambiguation)
+        square_name(idx).match(move.disambiguation)
       end
     end
 
@@ -290,7 +290,7 @@ module PGN
     #
     def first_piece(idx, off)
       idx += off
-      while (idx & 0x88).zero? # rubocop:disable Style/BitwisePredicate
+      while on_board?(idx)
         square = board.at_index(idx)
         return idx if square
 
@@ -315,7 +315,7 @@ module PGN
       return nil if move.castle
       return nil unless move.capture && board.at_index(dest_idx).nil?
 
-      (origin_rank * 16) + (dest_idx & 0x0F)
+      board.index_for(dest_idx & 0x0F, origin_rank)
     end
 
     def king_position
@@ -323,7 +323,7 @@ module PGN
 
       0.upto(7) do |rank|
         0.upto(7) do |file|
-          idx = (rank * 16) + file
+          idx = board.index_for(file, rank)
           return idx if board.at_index(idx) == king
         end
       end
@@ -332,6 +332,14 @@ module PGN
     end
 
     # -- 0x88 index helpers --------------------------------------------------
+
+    def on_board?(idx)
+      (idx & 0x88).zero? # rubocop:disable Style/BitwisePredicate
+    end
+
+    def square_name(idx)
+      board.position_for([idx & 0x0F, idx >> 4])
+    end
 
     def dest_idx
       @dest_idx ||= move.destination && board.index_of(move.destination)

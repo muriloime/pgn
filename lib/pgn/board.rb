@@ -27,10 +27,10 @@ module PGN
     ].freeze
 
     FILE_TO_INDEX = ('a'..'h').each_with_index.to_h
-    INDEX_TO_FILE = FILE_TO_INDEX.map(&:reverse).to_h
+    INDEX_TO_FILE = FILE_TO_INDEX.invert
 
     RANK_TO_INDEX = ('1'..'8').each_with_index.to_h
-    INDEX_TO_RANK = RANK_TO_INDEX.map(&:reverse).to_h
+    INDEX_TO_RANK = RANK_TO_INDEX.invert
 
     # algebraic to unicode piece lookup
     #
@@ -102,7 +102,6 @@ module PGN
           @cells[(r * 16) + f] = squares[f][r]
         end
       end
-      @cells
     end
 
     # @overload at(str)
@@ -119,9 +118,9 @@ module PGN
     #   board.at("e4") #=> "P"
     #
     def at(arg0, arg1 = nil)
-      return @cells[(arg1 * 16) + arg0] unless arg1.nil?
+      return at_index(index_for(arg0, arg1)) unless arg1.nil?
 
-      @cells[(rank_of(arg0) * 16) + file_of(arg0)]
+      at_index(index_of(arg0))
     end
 
     # @param changes [Hash<String, <String, nil>>] changes to make to the board
@@ -141,8 +140,7 @@ module PGN
     #   board.update("e4", "P")
     #
     def update(square, piece)
-      @cells[(rank_of(square) * 16) + file_of(square)] = piece
-      self
+      update_index(index_of(square), piece)
     end
 
     # @param position [String] the square in algebraic notation
