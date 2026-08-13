@@ -204,12 +204,12 @@ Parser — 500 immortal games (`bench/profile_parse.rb`):
 
 | Metric | original `pgn` | pgn2 | Δ |
 |---|---:|---:|---:|
-| Parse-only allocations (objects) | 1248065 | 347037 | -901028 (-72.2%) |
-| Parse-only allocations (bytes) | 120370470 | 17977414 | -102393056 (-85.1%) |
-| Parse + replay allocations (objects) | 3778073 | 831530 | -2946543 (-78.0%) |
-| Parse + replay allocations (bytes) | 249570048 | 47966112 | -201603936 (-80.8%) |
-| Parse-only throughput | 1461 ms/i | 305 ms/i | ~4.8x faster |
-| Parse + replay throughput | 1938 ms/i | 534 ms/i | ~3.6x faster |
+| Parse-only allocations (objects) | 1248065 | 288537 | -959528 (-76.9%) |
+| Parse-only allocations (bytes) | 120370470 | 15640374 | -104730096 (-87.0%) |
+| Parse + replay allocations (objects) | 3778073 | 773030 | -3005043 (-79.5%) |
+| Parse + replay allocations (bytes) | 249570048 | 45626128 | -203943920 (-81.7%) |
+| Parse-only throughput | 1461 ms/i | 203 ms/i | ~7.2x faster |
+| Parse + replay throughput | 1938 ms/i | 484 ms/i | ~4.0x faster |
 
 What changed to get there:
 
@@ -262,9 +262,19 @@ What changed to get there:
     must clone the index every move and every move pays maintenance that pawns
     (the common case, geometry-fixed origins) can't use — so it was rejected
     and reverted. The 0x88 board alone is the winner.
+15. `PGN::Lexer#scan_one` — byte-dispatch: the leading byte of the next
+    token selects the 1-2 `RULES` that can possibly match it (a frozen
+    `BYTE_DISPATCH` table; `ALL_RULES` fallback) instead of walking all nine
+    rules in order. `StringScanner#scan` was ~23% of parse CPU and the rule
+    loop ~38% inclusive; the dispatch nearly halves scan time. `PgnParser#
+    next_token` now mutates the lexer's `[type, value]` pair in place instead
+    of allocating a second translated pair (one array per token is the Racc
+    floor). Parse-only throughput +25% (305 → 203 ms/i), parse allocations
+    −17% (347037 → 288537 objects / 17977414 → 15640374 bytes for 500 games).
+    Output byte-identical.
 
 Public output (FEN, PGN) is byte-identical to the original gem; the full
-suite (182 examples) stays green. See `bench/IMPROVEMENTS.md` for the per-step
+suite (201 examples) stays green. See `bench/IMPROVEMENTS.md` for the per-step
 before/after deltas that produced these tables.
 
 ## Installation

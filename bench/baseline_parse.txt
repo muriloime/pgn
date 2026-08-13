@@ -1,25 +1,25 @@
 Corpus: 500 copies of the immortal game
 
 === 1. Parse-only allocations (500 games) ===
-total_allocated objects: 347037
-total_allocated bytes:   17977414
+total_allocated objects: 288537
+total_allocated bytes:   15640374
 
 === 2. Parse + replay allocations (500 games) ===
-total_allocated objects: 831530
-total_allocated bytes:   47966112
+total_allocated objects: 773030
+total_allocated bytes:   45626128
 
 === 3. Parse-only throughput (ips) ===
 ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
 Warming up --------------------------------------
      parse 500 games     1.000 i/100ms
 Calculating -------------------------------------
-     parse 500 games      4.053 (± 0.0%) i/s  (246.70 ms/i) -     21.000 in   5.180770s
+     parse 500 games      4.926 (±20.3%) i/s  (203.01 ms/i) -     25.000 in   5.075163s
 
 === 4. Parse + replay throughput (ips) ===
 ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]
 Warming up --------------------------------------
 parse+replay 500 games     1.000 i/100ms
 Calculating -------------------------------------
-parse+replay 500 games      1.872 (± 0.0%) i/s  (534.26 ms/i) -     10.000 in   5.342615s
+parse+replay 500 games      2.065 (± 0.0%) i/s  (484.34 ms/i) -     11.000 in   5.327699s
 
 Done. Compare this file against bench/baseline_parse.txt after optimizations.
