@@ -6,88 +6,70 @@ module PGN
   # the board need to be updated, new castling restrictions, the en passant
   # square and whether to update fullmove and halfmove counters.
   #
+  # Squares are addressed as 0x88 integer indices (see {PGN::Board}); this
+  # keeps the replay hot path free of `[file, rank]` coordinate arrays and
+  # square-name string allocations. The public {#origin} reader still returns
+  # an algebraic square string for API compatibility.
+  #
   # @!attribute board
   #   @return [PGN::Board] the current board
   #
   # @!attribute move
   #   @return [PGN::Move] the current move
   #
-  # @!attribute origin
-  #   @return [String, nil] the origin square in SAN
-  #
   class MoveCalculator
-    # Specifies the movement of pieces who are allowed to move in a
-    # given direction until they reach an obstacle or the end of the
-    # board.
+    # 0x88 ray-step offsets for sliding pieces. A step is a single integer
+    # add; off-board is `(idx & 0x88) != 0`, which also catches file wraparound.
     #
-    DIRECTIONS = {
-      'b' => [[1, 1], [-1,  1], [-1, -1], [1, -1]],
-      'r' => [[-1, 0], [1,  0], [0, -1], [0,  1]],
-      'q' => [[1,  1], [-1,  1], [-1, -1], [1, -1],
-              [-1, 0], [1,  0], [0, -1], [0, 1]]
+    SLIDE = {
+      'b' => [-15, 15, -17, 17],
+      'r' => [-1, 1, -16, 16],
+      'q' => [-1, 1, -16, 16, -15, 15, -17, 17]
     }.freeze
 
-    # Specifies the movement of pieces that have a limited set of moves
-    # they are allowed to make.
+    # 0x88 single-step offsets for knight and king.
     #
-    MOVES = {
-      'k' => [[-1, -1], [0, -1], [1, -1], [1,  0],
-              [1,  1], [0,  1], [-1,  1], [-1, 0]],
-      'n' => [[-1, -2], [-1, 2], [1, -2], [1,  2],
-              [-2, -1], [2, -1], [-2, 1], [2,  1]]
+    STEP = {
+      'k' => [-1, 1, -16, 16, -15, 15, -17, 17],
+      'n' => [33, 31, -31, -33, 18, 14, -14, -18]
     }.freeze
 
-    # Specifies possible pawn movements. It may seem backwards since it is
-    # used to compute the origin square and not the destination.
+    # Possible pawn origins, expressed as offsets from the destination square
+    # (pawn moves are computed backwards from where the pawn landed).
     #
-    PAWN_MOVES = {
-      'P' => {
-        capture: [[-1, -1], [1, -1]],
-        normal: [[0, -1]],
-        double: [[0, -2]]
-      },
-      'p' => {
-        capture: [[-1, 1], [1, 1]],
-        normal: [[0,  1]],
-        double: [[0,  2]]
-      }
+    PAWN_OFFSETS = {
+      'P' => { capture: [-17, -15], normal: [-16], double: [-32] },
+      'p' => { capture: [15, 17], normal: [16], double: [32] }
     }.freeze
 
-    # The squares to update for each possible castling move.
+    # The squares to update for each castling move, keyed by 0x88 index.
     #
     CASTLING = {
-      'Q' => {
-        'a1' => nil,
-        'c1' => 'K',
-        'd1' => 'R',
-        'e1' => nil
-      },
-      'K' => {
-        'e1' => nil,
-        'f1' => 'R',
-        'g1' => 'K',
-        'h1' => nil
-      },
-      'q' => {
-        'a8' => nil,
-        'c8' => 'k',
-        'd8' => 'r',
-        'e8' => nil
-      },
-      'k' => {
-        'e8' => nil,
-        'f8' => 'r',
-        'g8' => 'k',
-        'h8' => nil
-      }
+      'Q' => { 0 => nil, 2 => 'K', 3 => 'R', 4 => nil },
+      'K' => { 4 => nil, 5 => 'R', 6 => 'K', 7 => nil },
+      'q' => { 112 => nil, 114 => 'k', 115 => 'r', 116 => nil },
+      'k' => { 116 => nil, 117 => 'r', 118 => 'k', 119 => nil }
     }.freeze
 
-    # Frozen rook-origin -> castling-restriction lookup, shared by both
-    # white ('R') and black ('r') since their rook origins (a1/h1, a8/h8)
-    # are distinct keys. Replaces a per-call hash literal.
-    ROOK_RESTRICTIONS = { 'a1' => 'Q', 'h1' => 'K', 'a8' => 'q', 'h8' => 'k' }.freeze
+    # Corner-square 0x88 indices, used for castling-restriction bookkeeping
+    # (a rook leaving or being captured on a corner drops the matching right).
+    #
+    A1 = 0
+    H1 = 7
+    A8 = 112
+    H8 = 119
 
-    attr_accessor :board, :move, :origin
+    # rook-origin (0x88 index) -> castling restriction it drops.
+    #
+    ROOK_RESTRICTIONS = { A1 => 'Q', H1 => 'K', A8 => 'q', H8 => 'k' }.freeze
+
+    # Castling-move characters by side, for the "castling occurs" restriction.
+    # Frozen so {Array#include?} does not allocate per call.
+    #
+    WHITE_CASTLE = %w[K Q].freeze
+    BLACK_CASTLE = %w[k q].freeze
+
+    attr_accessor :board, :move
 
     # @param board [PGN::Board] the current board
     # @param move [PGN::Move] the current move
@@ -95,14 +77,24 @@ module PGN
     def initialize(board, move)
       self.board = board
       self.move  = move
-      self.origin = compute_origin
+      @origin_idx = compute_origin
+    end
+
+    # @return [String, nil] the origin square in algebraic notation, for API
+    #   compatibility. Internally the calculator works with the 0x88 index
+    #   (see {#origin_idx}); this reader materialises the string on demand.
+    #
+    def origin
+      return nil if @origin_idx.nil?
+
+      board.position_for([@origin_idx & 0x0F, @origin_idx >> 4])
     end
 
     # @return [PGN::Board] the board after the move is made
     #
     def result_board
       new_board = board.dup
-      new_board.change!(changes)
+      new_board.apply!(changes)
 
       new_board
     end
@@ -112,25 +104,28 @@ module PGN
     def castling_restrictions
       restrict = []
 
-      # when a king or rook is moved
       case move.piece
       when 'K'
-        restrict += %w[K Q]
+        restrict << 'K' << 'Q'
       when 'k'
-        restrict += %w[k q]
+        restrict << 'k' << 'q'
       when 'R', 'r'
-        restrict << ROOK_RESTRICTIONS[origin]
+        restrict << ROOK_RESTRICTIONS[@origin_idx]
       end
 
       # when castling occurs
-      restrict += %w[K Q] if %w[K Q].include?(move.castle)
-      restrict += %w[k q] if %w[k q].include?(move.castle)
+      if WHITE_CASTLE.include?(move.castle)
+        restrict << 'K' << 'Q'
+      elsif BLACK_CASTLE.include?(move.castle)
+        restrict << 'k' << 'q'
+      end
 
       # when a rook is taken
-      restrict << 'Q' if move.destination == 'a1'
-      restrict << 'q' if move.destination == 'a8'
-      restrict << 'K' if move.destination == 'h1'
-      restrict << 'k' if move.destination == 'h8'
+      dest = dest_idx
+      restrict << 'Q' if dest == A1
+      restrict << 'q' if dest == A8
+      restrict << 'K' if dest == H1
+      restrict << 'k' if dest == H8
 
       restrict.empty? ? restrict : restrict.compact.uniq
     end
@@ -151,35 +146,31 @@ module PGN
     #
     def en_passant_square
       return nil if move.castle
+      return nil unless move.pawn? && ((origin_rank - dest_rank).abs == 2)
 
-      return unless move.pawn? && (origin[1].to_i - move.destination[1].to_i).abs == 2
-
-      if move.white?
-        "#{origin[0]}3"
-      else
-        "#{origin[0]}6"
-      end
+      Board::INDEX_TO_FILE[origin_file] + (move.white? ? '3' : '6')
     end
 
     private
 
+    # The integer-indexed changes to apply to the board. Keys are 0x88
+    # indices, so no square-name strings are allocated on the hot path.
+    #
     def changes
       changes = {}
       changes.merge!(CASTLING[move.castle]) if move.castle
-      changes.merge!(
-        origin => nil,
-        move.destination => move.piece,
-        en_passant_capture => nil
-      )
-      changes[move.destination] = move.promotion if move.promotion
+      changes[@origin_idx] = nil
+      changes[dest_idx] = move.piece
+      changes[en_passant_capture] = nil
+      changes[dest_idx] = move.promotion if move.promotion
 
-      changes.reject! { |key, _| key.nil? or key.empty? }
+      changes.reject! { |idx, _| idx.nil? }
 
       changes
     end
 
     # Using the current position and move, figure out where the piece
-    # came from.
+    # came from (as a 0x88 index).
     #
     def compute_origin
       return nil if move.castle
@@ -194,58 +185,55 @@ module PGN
 
       possibilities = disambiguate(possibilities) if possibilities.length > 1
 
-      board.position_for(possibilities.first)
+      possibilities.first
     end
 
-    # From the destination square, move in each direction stopping if we
-    # reach the end of the board. If we encounter a piece, add it to the
-    # list of origin possibilities if it is the moving piece, or else
-    # check the next direction.
+    # From the destination square, walk each slider direction until the first
+    # occupied square. If that piece is the moving piece, the square it sits
+    # on is a possible origin.
     #
     def direction_origins
-      directions    = DIRECTIONS[move.piece.downcase]
-      possibilities = []
+      offsets = SLIDE[move.piece.downcase]
+      dest    = dest_idx
 
-      directions.each do |dir|
-        square = first_piece(destination_coords, dir)
+      possibilities = []
+      offsets.each do |off|
+        square = first_piece(dest, off)
         possibilities << square if piece_at(square) == move.piece
       end
 
       possibilities
     end
 
-    # From the destination square, make each move. If it is a valid
-    # square and matches the moving piece, add it to the list of origin
-    # possibilities.
+    # From the destination square, apply each single-step offset. If the
+    # target square is on the board and holds the moving piece, it is a
+    # possible origin.
     #
-    def move_origins(moves = nil)
-      moves         ||= MOVES[move.piece.downcase]
-      possibilities   = []
-      file, rank      = destination_coords
+    def move_origins(offsets = STEP[move.piece.downcase])
+      dest = dest_idx
 
-      moves.each do |i, j|
-        f = file + i
-        r = rank + j
+      possibilities = []
+      offsets.each do |off|
+        target = dest + off
+        next unless (target & 0x88).zero? # rubocop:disable Style/BitwisePredicate
 
-        possibilities << [f, r] if valid_square?(f, r) && board.at(f, r) == move.piece
+        possibilities << target if board.at_index(target) == move.piece
       end
 
       possibilities
     end
 
-    # Computes the possbile pawn origins based on the destination square
+    # Computes the possible pawn origins based on the destination square
     # and whether or not the move is a capture.
     #
     def pawn_origins
-      _, rank     = destination_coords
-      double_rank = (rank == 3 && move.white?) || (rank == 4 && move.black?)
+      double = (dest_rank == 3 && move.white?) || (dest_rank == 4 && move.black?)
 
-      pawn_moves = PAWN_MOVES[move.piece]
+      pawn_moves = PAWN_OFFSETS[move.piece]
+      offsets = move.capture ? pawn_moves[:capture] : pawn_moves[:normal]
+      offsets += pawn_moves[:double] if double
 
-      moves = move.capture ? pawn_moves[:capture] : pawn_moves[:normal]
-      moves += pawn_moves[:double] if double_rank
-
-      move_origins(moves)
+      move_origins(offsets)
     end
 
     def disambiguate(possibilities)
@@ -259,36 +247,36 @@ module PGN
     # Try to disambiguate based on the standard algebraic notation.
     #
     def disambiguate_san(possibilities)
-      if move.disambiguation
-        possibilities.select { |p| board.position_for(p).match(move.disambiguation) }
-      else
-        possibilities
+      return possibilities unless move.disambiguation
+
+      possibilities.select do |idx|
+        board.position_for([idx & 0x0F, idx >> 4]).match(move.disambiguation)
       end
     end
 
-    # A pawn can't move two spaces if there is a pawn in front of it.
+    # A pawn can't move two spaces if there is a pawn in front of it. A
+    # double-push origin sits on rank 2 (white) or 7 (black); reject those
+    # candidates when more than one pawn could have reached the destination.
     #
     def disambiguate_pawns(possibilities)
-      if move.piece.match(/p/i) && !move.capture
-        possibilities.reject { |p| board.position_for(p).match(/2|7/) }
-      else
-        possibilities
-      end
+      return possibilities unless move.piece.match?(/p/i) && !move.capture
+
+      possibilities.reject { |idx| (idx >> 4) == 1 || (idx >> 4) == 6 }
     end
 
     # A piece can't move if it would result in a discovered check.
     #
     def disambiguate_discovered_check(possibilities)
-      king_pos = king_position
+      king_idx = king_position
 
-      DIRECTIONS.each do |attacking_piece, directions|
+      SLIDE.each do |attacking_piece, offsets|
         attacking_piece = attacking_piece.upcase if move.black?
 
-        directions.each do |dir|
-          square = first_piece(king_pos, dir)
+        offsets.each do |off|
+          square = first_piece(king_idx, off)
           next unless piece_at(square) == move.piece && possibilities.include?(square)
 
-          next_square = first_piece(square, dir)
+          next_square = first_piece(square, off)
           possibilities.reject! { |p| p == square } if piece_at(next_square) == attacking_piece
         end
       end
@@ -296,62 +284,69 @@ module PGN
       possibilities
     end
 
-    # Walks from `from` in `direction` until it reaches the edge of the board
-    # or the first occupied square. Returns that square's `[file, rank]`
-    # coordinates, or `nil` if no piece was encountered before the edge. The
-    # caller reads the piece off the board itself, so this avoids allocating
-    # the `[piece, square]` wrapper tuple per direction scan.
+    # Walks from `idx` in the 0x88 direction `off` until it reaches the edge
+    # of the board or the first occupied square. Returns that square's 0x88
+    # index, or nil if no piece was encountered before the edge.
     #
-    def first_piece(from, direction)
-      file, rank = from
-      i,    j    = direction
+    def first_piece(idx, off)
+      idx += off
+      while (idx & 0x88).zero? # rubocop:disable Style/BitwisePredicate
+        square = board.at_index(idx)
+        return idx if square
 
-      loop do
-        file += i
-        rank += j
-        return nil if file.negative? || file > 7 || rank.negative? || rank > 7
-
-        square = [file, rank]
-        return square if board.at(file, rank)
+        idx += off
       end
+      nil
     end
 
-    # Reads the piece on a square, tolerating a nil square (returned by
-    # {#first_piece} when the scan ran off the edge). Kept as a helper so the
-    # callers read the piece once instead of unpacking a `[piece, square]`
-    # tuple per direction scan.
+    # Reads the piece at a 0x88 index, returning nil for an off-board (nil)
+    # index. Keeps {#disambiguate_discovered_check} within the configured
+    # complexity limits.
     #
-    def piece_at(square)
-      square && board.at(square[0], square[1])
+    def piece_at(idx)
+      idx && board.at_index(idx)
     end
 
-    # If the move is a capture and there is no piece on the
-    # destination square, it must be an en passant capture.
+    # If the move is a capture and there is no piece on the destination
+    # square, it must be an en passant capture. The captured pawn sits on the
+    # destination file and the moving pawn's origin rank.
     #
     def en_passant_capture
       return nil if move.castle
+      return nil unless move.capture && board.at_index(dest_idx).nil?
 
-      move.destination[0] + origin[1] if !board.at(move.destination) && move.capture
+      (origin_rank * 16) + (dest_idx & 0x0F)
     end
 
     def king_position
       king = move.white? ? 'K' : 'k'
 
-      0.upto(7) do |file|
-        0.upto(7) do |rank|
-          return [file, rank] if board.at(file, rank) == king
+      0.upto(7) do |rank|
+        0.upto(7) do |file|
+          idx = (rank * 16) + file
+          return idx if board.at_index(idx) == king
         end
       end
 
       nil
     end
 
-    def valid_square?(file, rank)
-      file >= 0 && file < 8 && rank >= 0 && rank < 8
+    # -- 0x88 index helpers --------------------------------------------------
+
+    def dest_idx
+      @dest_idx ||= move.destination && board.index_of(move.destination)
     end
 
-    def destination_coords
-      @destination_coords ||= board.coordinates_for(move.destination)
+    def origin_file
+      @origin_idx & 0x0F
+    end
+
+    def origin_rank
+      @origin_idx >> 4
+    end
+
+    def dest_rank
+      dest_idx >> 4
     end
   end
 end
