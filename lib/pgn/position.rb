@@ -142,8 +142,8 @@ module PGN
     # First cut: re-seed from scratch. Correct, and the "keeps the replay
     # hash in sync" spec pins correctness. Task 7 replaces this with the
     # incremental XOR-diff path.
-    def incremental_zobrist(_move, _calculator, new_board, new_castling, new_ep)
-      Zobrist.seed(new_board, next_player, new_castling, new_ep)
+    def incremental_zobrist(_move, calculator, new_board, new_castling, new_ep)
+      Zobrist.update(self, calculator, new_board, new_castling, new_ep)
     end
 
     def board_equal?(other_board)

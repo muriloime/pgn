@@ -69,5 +69,70 @@ module PGN
       h ^= EP_FILE[en_passant.getbyte(0) - 97] if en_passant && !en_passant.empty?
       h
     end
+
+    # Derive the hash for the position after a move by XOR-ing only the
+    # state that changed: side to move, removed castling rights, the old/new
+    # en-passant file, and the piece(s) on every touched square.
+    #
+    # @param position [PGN::Position] the pre-move position
+    # @param calculator [PGN::MoveCalculator] (carries the move)
+    # @param new_board [PGN::Board]
+    # @param new_castling [Array<String>]
+    # @param new_ep [String, nil]
+    # @return [Integer]
+    def self.update(position, calculator, new_board, new_castling, new_ep)
+      h = position.zobrist ^ SIDE
+
+      (position.castling - new_castling).each do |right|
+        h ^= CASTLING[right] if CASTLING.key?(right)
+      end
+
+      h ^= ep_file_key(position.en_passant)
+      h ^= ep_file_key(new_ep)
+
+      each_changed_index(calculator).each do |idx|
+        h ^= piece_key(position.board.at_index(idx), idx)
+        h ^= piece_key(new_board.at_index(idx), idx)
+      end
+
+      h
+    end
+
+    def self.ep_file_key(en_passant)
+      return 0 if en_passant.nil? || en_passant.empty?
+
+      EP_FILE[en_passant.getbyte(0) - 97]
+    end
+    private_class_method :ep_file_key
+
+    def self.piece_key(piece, idx)
+      return 0 if piece.nil?
+
+      TABLE[piece][idx]
+    end
+    private_class_method :piece_key
+
+    # Yields each 0x88 index whose piece may have changed during the move.
+    # For castling this comes from MoveCalculator::CASTLING; for normal
+    # moves it is origin, destination, and the en-passant-captured pawn.
+    # Nil indices (e.g. the "--" no-op move has no origin/destination) are
+    # skipped.
+    def self.each_changed_index(calculator)
+      move = calculator.move
+      if move.castle
+        MoveCalculator::CASTLING[move.castle].each_key.to_a
+      else
+        idxs = []
+        origin = calculator.instance_variable_get(:@origin_idx)
+        idxs << origin if origin
+        dest = calculator.send(:dest_idx)
+        idxs << dest if dest
+        if (ep = calculator.send(:en_passant_capture))
+          idxs << ep
+        end
+        idxs
+      end
+    end
+    private_class_method :each_changed_index
   end
 end
