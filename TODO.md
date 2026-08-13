@@ -27,26 +27,20 @@
   (+49% throughput), allocations 1571→976 objects (−38%) / 92440→62064 bytes
   (−33%); parse+replay +21% throughput. 182 specs green, 0 new rubocop
   offenses vs main. The public string/coord API is preserved (additive).
-  (c) Two related ideas were left alone during cleanup rather than "fixed",
-  since fixing them would cost more than they're worth right now. First,
-  `Board#squares` rebuilds the full 8x8 array from `@cells` on every call
-  (9 allocations, 64 reads); it's off the replay hot path by design, but
-  `FEN#to_s` round-trips through it on every position-to-FEN call, so FEN
-  generation pays that cost repeatedly. Memoizing would mean invalidating
-  the cache from `update`/`apply!`, i.e. adding a write to the actual hot
-  path to speed up a path that isn't hot -- the wrong trade; if FEN
-  generation becomes hot, have it read `@cells` directly instead. Second,
-  `Board#dup` uses `Board.allocate` plus `instance_variable_set` to copy
-  `@cells` directly and skip that same conversion -- a deliberate
-  hot-path shortcut (`dup` runs every move), but it bypasses the public
-  constructor via reflection, so there's no real "build a Board from raw
-  cells" factory, just this one-off reach-around; a `Board.from_cells`
-  factory would be cleaner without changing the perf story. Also
-  considered and not attempted: column-granularity copy-on-write in
-  `dup` (the pre-0x88 Board only duplicated touched file-columns on
-  write); the flat 0x88 array trades that away for simplicity and the
-  +49% throughput measured above, and reintroducing it would need its
-  own A/B before it's worth the complexity.
+  (c) One related idea was left alone during cleanup rather than "fixed",
+  since fixing it would cost more than it's worth right now: `Board#squares`
+  rebuilds the full 8x8 array from `@cells` on every call (9 allocations,
+  64 reads); it's off the replay hot path by design, but `FEN#to_s`
+  round-trips through it on every position-to-FEN call, so FEN generation
+  pays that cost repeatedly. Memoizing would mean invalidating the cache
+  from `update`/`apply!`, i.e. adding a write to the actual hot path to
+  speed up a path that isn't hot -- the wrong trade; if FEN generation
+  becomes hot, have it read `@cells` directly instead. Also considered
+  and not attempted: column-granularity copy-on-write in `dup` (the pre-0x88
+  Board only duplicated touched file-columns on write); the flat 0x88 array
+  trades that away for simplicity and the +49% throughput measured above,
+  and reintroducing it would need its own A/B before it's worth the
+  complexity.
   (a) ✗ (attempted, rejected) A piece-location index (piece → 0x88 indices)
   maintained in `update`/`apply!` and used for O(1) slider/leaper/king
   origin lookups. Implemented on top of (b), all 182 specs green, but it
@@ -73,14 +67,3 @@
   to reuse as-is. The brace check is a bandaid for `clean_text` not fully
   normalizing multi-line/nested comments in one pass; fixing that at the
   source would let `moves=` reuse unconditionally.
-- `MoveCalculator#dest_idx` (formerly `#destination_coords`, renamed in the
-  1.3.0 0x88 rewrite) memoizes into `@dest_idx` based on `board`/`move`
-  never changing after `#initialize` — true today, but only by convention,
-  since `board` and `move` are public `attr_accessor`s with no cache
-  invalidation tied to their setters. If a future caller ever mutates and
-  reuses a `MoveCalculator` instance, this memo goes stale silently. Either
-  drop the public setters or invalidate `@dest_idx` when they're used.
-  Relatedly, the `||=` doesn't actually memoize for castling moves (where
-  `move.destination` is `nil`, so the right-hand side re-evaluates every
-  call); harmless since the result is nil either way and castling is rare,
-  but worth a `defined?(@dest_idx)` guard if this method gets hotter.

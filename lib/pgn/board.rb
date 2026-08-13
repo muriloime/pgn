@@ -171,13 +171,25 @@ module PGN
       end.join("\n")
     end
 
+    # Build a {Board} directly from a 0x88 cell array, bypassing the 8x8
+    # -> 0x88 conversion in {#initialize}. Used by {#dup} (which runs every
+    # move) to skip the per-square rebuild; the cell array is already in the
+    # canonical 128-cell layout.
+    #
+    # @param cells [Array<String, nil>] a 128-cell 0x88 array
+    # @return [PGN::Board]
+    #
+    def self.from_cells(cells)
+      board = allocate
+      board.instance_variable_set(:@cells, cells)
+      board
+    end
+
     # @return [PGN::Board] a copy of self. Copies the 128-cell 0x88 array;
     #   mutations to the copy do not affect the original.
     #
     def dup
-      copy = PGN::Board.allocate
-      copy.instance_variable_set(:@cells, @cells.dup)
-      copy
+      self.class.from_cells(@cells.dup)
     end
 
     # -- 0x88 hot-path API (integer indices) ---------------------------------

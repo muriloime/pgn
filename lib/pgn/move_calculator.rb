@@ -83,14 +83,14 @@ module PGN
     WHITE_CASTLE = %w[K Q].freeze
     BLACK_CASTLE = %w[k q].freeze
 
-    attr_accessor :board, :move
+    attr_reader :board, :move
 
     # @param board [PGN::Board] the current board
     # @param move [PGN::Move] the current move
     #
     def initialize(board, move)
-      self.board = board
-      self.move  = move
+      @board = board
+      @move  = move
       @origin_idx = compute_origin
     end
 
