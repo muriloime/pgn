@@ -1,9 +1,10 @@
 name: native
 
-# Builds and tests the optional Rust bitboard perft backend: runs the
-# pure-Rust engine's `cargo test` (the perft oracle), compiles the native
-# extension via `rake compile`, and runs the full RSpec suite (which
-# includes the PGN::Bitboard::Engine specs).
+# Builds and tests the required Rust bitboard perft backend (a thin
+# adapter over the `chessie` crate): runs the perft oracle via
+# `cargo test`, compiles the native extension via `rake compile`, and
+# runs the full RSpec suite (which loads the ext and includes the
+# PGN::Bitboard::Engine specs).
 
 on:
   push:

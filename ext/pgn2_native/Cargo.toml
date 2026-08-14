@@ -2,8 +2,8 @@
 members = ["pgn2-bitboard", "pgn2_native"]
 resolver = "2"
 
-# The magic-bitboard search and perft tests do real work; optimize tests so
-# `cargo test` builds the tables in release-like time instead of minutes.
+# The perft oracle does real work; optimize tests so `cargo test` runs
+# in release-like time instead of minutes.
 [profile.test]
 opt-level = 2
 
