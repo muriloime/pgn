@@ -1,3 +1,4 @@
+use crate::moves::{Move, Flag};
 use crate::piece::{Color, PieceKind};
 use crate::square::{Bitboard, Square};
 
@@ -11,6 +12,14 @@ pub struct Board {
     pub ep: Option<Square>,
     pub halfmove: u16,
     pub fullmove: u16,
+}
+
+/// Records exactly what `make` mutated so `unmake` restores bit-for-bit.
+pub struct Undo {
+    pub captured: Option<(Color, PieceKind)>,
+    pub castling: u8,
+    pub ep: Option<Square>,
+    pub halfmove: u16,
 }
 
 fn ci(c: Color) -> usize { c as usize }
@@ -79,6 +88,131 @@ impl Board {
 
         Ok(Board { pieces, side: side_color, castling: cast, ep, halfmove, fullmove })
     }
+
+    pub fn piece_at(&self, sq: Square) -> Option<(Color, PieceKind)> {
+        for c in Color::all() {
+            for k in PieceKind::ALL {
+                if !(self.piece_bb(c, k) & Bitboard::single(sq)).is_empty() {
+                    return Some((c, k));
+                }
+            }
+        }
+        None
+    }
+
+    fn put(&mut self, c: Color, k: PieceKind, sq: Square) {
+        self.pieces[c as usize][k.index()] |= Bitboard::single(sq);
+    }
+    fn clear(&mut self, sq: Square) {
+        let mask = !Bitboard::single(sq);
+        for c in Color::all() {
+            for k in PieceKind::ALL {
+                self.pieces[c as usize][k.index()] &= mask;
+            }
+        }
+    }
+
+    fn rook_squares_for_castle(to: Square) -> (Square, Square) {
+        // (rook_from, rook_to) for a king moving to `to`.
+        let f = to.file();
+        let r = to.rank();
+        match f {
+            6 => (Square::from_algebraic(7, r), Square::from_algebraic(5, r)), // O-O: h-file rook -> f-file
+            2 => (Square::from_algebraic(0, r), Square::from_algebraic(3, r)), // O-O-O: a-file rook -> d-file
+            _ => unreachable!("castle to non-castle file"),
+        }
+    }
+
+    pub fn make(&mut self, m: Move) -> Undo {
+        let (from, to) = (m.from(), m.to());
+        let (color, kind) = self.piece_at(from).expect("make: no mover");
+        let undo = Undo {
+            captured: self.piece_at(to),
+            castling: self.castling,
+            ep: self.ep,
+            halfmove: self.halfmove,
+        };
+        self.clear(from);
+        self.clear(to);
+        self.put(color, kind, to);
+
+        match m.flag() {
+            Flag::EnPassant => {
+                let cap_sq = Square::from_algebraic(to.file(), from.rank());
+                self.clear(cap_sq);
+            }
+            Flag::Castle => {
+                let (rf, rt) = Self::rook_squares_for_castle(to);
+                self.clear(rf);
+                self.put(color, PieceKind::Rook, rt);
+            }
+            Flag::Promotion => {
+                self.clear(to);
+                self.put(color, m.promo().expect("promo"), to);
+            }
+            _ => {}
+        }
+
+        self.ep = if m.is_double_pawn() {
+            Some(Square::from_algebraic(from.file(), (from.rank() + to.rank()) / 2))
+        } else {
+            None
+        };
+
+        if kind == PieceKind::King {
+            if color == Color::White { self.castling &= !0b0011; } else { self.castling &= !0b1100; }
+        }
+        for &sq in [from, to].iter() {
+            match (sq.file(), sq.rank()) {
+                (0, 0) => self.castling &= !0b0010, // a1 -> white Q-side
+                (7, 0) => self.castling &= !0b0001, // h1 -> white K-side
+                (0, 7) => self.castling &= !0b1000, // a8 -> black Q-side
+                (7, 7) => self.castling &= !0b0100, // h8 -> black K-side
+                _ => {}
+            }
+        }
+        self.halfmove = if kind == PieceKind::Pawn || undo.captured.is_some() { 0 } else { self.halfmove + 1 };
+        if color == Color::Black { self.fullmove += 1; }
+        self.side = self.side.opposite();
+        undo
+    }
+
+    pub fn unmake(&mut self, m: Move, undo: Undo) {
+        let (from, to) = (m.from(), m.to());
+        self.side = self.side.opposite();
+        let color = self.side;
+
+        let kind = if m.is_promotion() {
+            PieceKind::Pawn
+        } else {
+            self.piece_at(to).map(|(_, k)| k).expect("unmake: no mover")
+        };
+        self.clear(to);
+        self.put(color, kind, from);
+        if let Some((cap_c, cap_k)) = undo.captured {
+            self.put(cap_c, cap_k, to);
+        }
+
+        match m.flag() {
+            Flag::EnPassant => {
+                let cap_sq = Square::from_algebraic(to.file(), from.rank());
+                self.put(color.opposite(), PieceKind::Pawn, cap_sq);
+            }
+            Flag::Castle => {
+                let (rf, rt) = Self::rook_squares_for_castle(to);
+                self.clear(rt);
+                self.put(color, PieceKind::Rook, rf);
+            }
+            _ => {}
+        }
+
+        self.castling = undo.castling;
+        self.ep = undo.ep;
+        self.halfmove = undo.halfmove;
+        if color == Color::Black {
+            self.fullmove -= 1;
+        }
+    }
 }
 
 fn parse_square(s: &str) -> Option<Square> {
@@ -120,5 +254,45 @@ mod tests {
         assert_eq!(b.ep, None);
         // Kiwipete is a 32-piece position (full-ish middlegame).
         assert_eq!(b.occupied().popcount(), 32);
+    }
+
+    use crate::moves::{Move, Flag};
+
+    #[test]
+    fn make_unmake_restores_startpos() {
+        crate::attacks::init();
+        let mut b = Board::from_fen(STARTPOS).unwrap();
+        let before = b.clone();
+        let e2e4 = Move::new(Square::from_algebraic(4, 1), Square::from_algebraic(4, 3), Flag::DoublePawn);
+        let undo = b.make(e2e4);
+        assert_eq!(b.side, Color::Black);
+        assert_eq!(b.ep, Some(Square::from_algebraic(4, 2)));
+        b.unmake(e2e4, undo);
+        assert_eq!(b, before);
+    }
+
+    #[test]
+    fn make_unmake_capture_restores() {
+        crate::attacks::init();
+        let mut b = Board::from_fen("8/8/8/3p4/4P3/8/8/4K2k w - - 0 1").unwrap();
+        let before = b.clone();
+        let exd5 = Move::new(Square::from_algebraic(4, 3), Square::from_algebraic(3, 4), Flag::Normal);
+        let undo = b.make(exd5);
+        assert_eq!(b.piece_bb(Color::Black, PieceKind::Pawn).popcount(), 0);
+        b.unmake(exd5, undo);
+        assert_eq!(b, before);
+    }
+
+    #[test]
+    fn make_unmake_white_castle_restores() {
+        crate::attacks::init();
+        let mut b = Board::from_fen("4k3/8/8/8/8/8/8/R3K3 w Q - 0 1").unwrap();
+        let before = b.clone();
+        let castle = Move::new(Square::from_algebraic(4, 0), Square::from_algebraic(2, 0), Flag::Castle);
+        let undo = b.make(castle);
+        let d1 = Square::from_algebraic(3, 0);
+        assert_eq!(b.piece_bb(Color::White, PieceKind::Rook) & Bitboard::single(d1), Bitboard::single(d1));
+        b.unmake(castle, undo);
+        assert_eq!(b, before);
     }
 }
