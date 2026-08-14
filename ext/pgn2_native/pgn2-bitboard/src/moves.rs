@@ -267,3 +267,64 @@ fn gen_castle(b: &Board, us: Color, from: Square, occ: crate::square::Bitboard, 
         }
     }
 }
+
+// ---- UCI encoding / decoding ----
+
+impl Move {
+    /// UCI string, e.g. "e2e4", "e1g1", "e7e8q".
+    pub fn to_uci(self) -> String {
+        let mut s = format!("{}{}", sq_name(self.from()), sq_name(self.to()));
+        if let Some(k) = self.promo() {
+            s.push(match k {
+                PieceKind::Knight => 'n',
+                PieceKind::Bishop => 'b',
+                PieceKind::Rook => 'r',
+                PieceKind::Queen => 'q',
+                _ => 'q',
+            });
+        }
+        s
+    }
+
+    /// Compare two moves by from/to/promo, ignoring the special flag. This
+    /// lets `#legal?` match a user UCI ("e1g1") against a generated castling
+    /// move, since a bare UCI string cannot encode the castle/ep/double flag.
+    pub fn same_target(self, other: Move) -> bool {
+        self.from() == other.from() && self.to() == other.to() && self.promo() == other.promo()
+    }
+}
+
+fn sq_name(s: Square) -> String {
+    let f = (b'a' + s.file()) as char;
+    let r = (b'1' + s.rank()) as char;
+    format!("{f}{r}")
+}
+
+/// Parse a UCI move string into a `Move` (promotions carry the piece letter).
+/// The resulting flag is Normal/Promotion only — castle/ep/double flags are
+/// not recoverable from a bare UCI string; compare with `same_target`.
+pub fn uci_parse(s: &str) -> Option<Move> {
+    let b = s.as_bytes();
+    if b.len() < 4 { return None; }
+    let from = parse_sq(&b[0..2])?;
+    let to = parse_sq(&b[2..4])?;
+    if let Some(&c) = b.get(4) {
+        let kind = match c {
+            b'n' => PieceKind::Knight,
+            b'b' => PieceKind::Bishop,
+            b'r' => PieceKind::Rook,
+            b'q' => PieceKind::Queen,
+            _ => return None,
+        };
+        return Some(Move::promotion(from, to, kind));
+    }
+    Some(Move::new(from, to, Flag::Normal))
+}
+
+fn parse_sq(n: &[u8]) -> Option<Square> {
+    if n.len() != 2 { return None; }
+    let f = n[0].checked_sub(b'a')?;
+    let r = n[1].checked_sub(b'1')?;
+    if f > 7 || r > 7 { return None; }
+    Some(Square::from_algebraic(f, r))
+}

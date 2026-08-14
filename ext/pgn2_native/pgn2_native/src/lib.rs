@@ -25,6 +25,21 @@ impl Engine {
         pgn2_bitboard::attacks::init();
         self.0.borrow().perft(depth)
     }
+
+    fn legal_moves_ruby(&self) -> Vec<String> {
+        pgn2_bitboard::attacks::init();
+        let mut v: Vec<String> = self.0.borrow().legal_moves().iter().map(|m| m.to_uci()).collect();
+        v.sort();
+        v
+    }
+
+    fn legal_p(&self, uci: String) -> bool {
+        pgn2_bitboard::attacks::init();
+        match pgn2_bitboard::moves::uci_parse(&uci) {
+            Some(parsed) => self.0.borrow().legal_moves().iter().any(|m| m.same_target(parsed)),
+            None => false,
+        }
+    }
 }
 
 #[magnus::init]
@@ -36,5 +51,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     engine.define_alloc_func::<Engine>();
     engine.define_method("initialize", method!(Engine::initialize, 1))?;
     engine.define_method("perft", method!(Engine::perft, 1))?;
+    engine.define_method("legal_moves", method!(Engine::legal_moves_ruby, 0))?;
+    engine.define_method("legal?", method!(Engine::legal_p, 1))?;;
     Ok(())
 }
