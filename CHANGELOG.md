@@ -4,6 +4,45 @@
 
 ### Summary
 
+Native Rust bitboard perft backend: a `pgn2-bitboard` engine (magic/BMI2-
+`pext` slider tables, make/unmake, full legal move generation) exposed to
+Ruby as `PGN::Bitboard::Engine` via a `magnus`/`rb_sys` `cdylib`
+(`pgn2_native`), shipped as precompiled platform gems. The engine lives in
+`ext/pgn2_native/` and is fully decoupled from the pure-Ruby 0x88
+`Board`/`Notation`/`MoveCalculator`, which stay byte-identical; all specs
+green. Fast perft (≈11–16 Mnps through the Ruby binding) is the primary
+deliverable; a thin `#legal_moves` / `#legal?` UCI API is the byproduct.
+
+### Added
+- **`PGN::Bitboard::Engine`** (native): `Engine.new(fen)`, `#perft(depth)`,
+  `#legal_moves` (sorted UCI), `#legal?(uci)`. Validates against the
+  published perft suite (startpos depth 6 = 119,060,324; Kiwipete depth 5
+  = 193,690,690; positions 3–6).
+- **`ext/pgn2_native/`** Cargo workspace: `pgn2-bitboard` (pure-Rust engine,
+  `cargo test`) + `pgn2_native` (`cdylib`, `magnus` bindings). Built via
+  `rb_sys`/`extconf.rb`; `bundle exec rake compile`.
+- **`lib/pgn/bitboard.rb`** load gate: requires the native lib, rescuing
+  `LoadError` so the rest of the gem works without it.
+- **`bench/perft.rb`** + `rake bench:perft`: perft nps benchmark.
+- **CI**: `.github/workflows/native.yml` (`cargo test` + `rake compile` +
+  `rspec`) and `.github/workflows/release-gems.yml` (cross-compile
+  prebuilt platform gems via `rake-compiler-dock`).
+
+### Distribution note
+
+This adds a **required compiled extension**. Release artifacts are
+**precompiled platform gems** (x86_64/aarch64, linux/darwin) built in CI;
+end users and the chessellence Docker build need no Rust toolchain. Interim
+source builds install Rust in the Docker build stage (see README). The
+pure-Ruby gem contract is otherwise unchanged; `PGN::Bitboard` is simply
+undefined when the extension is absent.
+
+---
+
+## Unreleased (attack-masks)
+
+### Summary
+
 Attack-mask pass: precomputed knight/king on-board target tables on
 `PGN::Board`, used by `Notation` (reaches/attacked/leaper moves) and
 `MoveCalculator` (knight/king origin lookup), plus a retained-memory

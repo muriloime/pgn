@@ -1,0 +1,31 @@
+name: native
+
+# Builds and tests the optional Rust bitboard perft backend: runs the
+# pure-Rust engine's `cargo test` (the perft oracle), compiles the native
+# extension via `rake compile`, and runs the full RSpec suite (which
+# includes the PGN::Bitboard::Engine specs).
+
+on:
+  push:
+    branches: [main, 'perf/**', 'feat/**']
+  pull_request:
+
+jobs:
+  test:
+    name: cargo test + rake compile + rspec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-src
+      - name: cargo test (Rust engine + perft oracle)
+        run: cargo test --manifest-path ext/pgn2_native/Cargo.toml
+      - name: rake compile (build native ext)
+        run: bundle exec rake compile
+      - name: rspec (with native ext loaded)
+        run: bundle exec rspec

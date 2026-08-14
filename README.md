@@ -324,6 +324,58 @@ Or install it yourself as:
 
     $ gem install pgn2
 
+The optional native perft backend (see [Native perft engine](#native-perft-engine-optional))
+ships as prebuilt platform gems, so installing `pgn2` pulls a binary for your
+platform — no Rust toolchain required. When building from source (or a
+checkout), compile it with `bundle exec rake compile`.
+
+## Native perft engine (optional)
+
+`pgn2` ships an optional Rust bitboard engine (`PGN::Bitboard::Engine`)
+exposed through a thin Ruby API. It targets fast perft numbers using
+[BMI2 `pext`][pext] slider attack tables on x86-64 (with a ray-walker
+fallback elsewhere) and is fully separate from the pure-Ruby 0x88
+`PGN::Board`/`PGN::Notation`/`PGN::MoveCalculator` — those stay
+byte-identical and untouched.
+
+[pext]: https://www.felixcloutier.com/x86/pext
+
+```ruby
+require "pgn"
+
+engine = PGN::Bitboard::Engine.new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+engine.perft(5)        # => 4865609
+engine.legal_moves     # => ["a2a3", "a2a4", ..., "h2h3", "h2h4"] (sorted UCI)
+engine.legal?("e2e4")  # => true
+engine.legal?("e2e5")  # => false
+```
+
+- `#perft(depth)` — full-width node count; validated against the standard
+  perft suite (startpos, Kiwipete, positions 3–6).
+- `#legal_moves` — legal moves as sorted UCI strings (e.g. `"e2e4"`,
+  `"e1g1"`, `"e7e8q"`). SAN disambiguation is left to the existing
+  pure-Ruby `PGN::Notation`.
+- `#legal?(uci)` — whether a UCI move is legal.
+
+Benchmark it with `bundle exec rake bench:perft` (after `rake compile`).
+
+### Distribution
+
+The native extension is distributed as **precompiled platform gems**
+(cross-compiled via `rake-compiler-dock` in CI; see
+`.github/workflows/release-gems.yml`), so end users need no Rust toolchain.
+For interim source builds (e.g. a Docker build stage before prebuilt gems
+are published), install the Rust toolchain in the build stage before
+`bundle install`:
+
+```dockerfile
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH=/usr/local/cargo/bin:$PATH
+```
+
+The final runtime image needs nothing extra. If the extension is absent,
+`PGN::Bitboard` is simply undefined and the rest of the gem works as before.
+
 ## Contributing
 
 1. Fork it

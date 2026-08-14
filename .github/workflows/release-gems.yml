@@ -1,0 +1,40 @@
+name: release-gems
+
+# Cross-compiles prebuilt native platform gems for the Rust bitboard
+# backend using rake-compiler-dock (which spins up Docker images for each
+# target). End users then `gem install pgn2` and get a binary — no Rust
+# toolchain required. Push to RubyGems is gated on a published release;
+# `workflow_dispatch` builds + uploads artifacts without pushing.
+#
+# Targets (set inside the rake-compiler-dock environment):
+#   x86_64-linux, aarch64-linux, x86_64-darwin, aarch64-darwin
+# (configure the platform list in Rakefile cross-compile settings.)
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build prebuilt platform gems
+        run: bundle exec rake native:gem
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-gems
+          path: pkg/*.gem
+      - name: Push to RubyGems
+        if: github.event_name == 'release'
+        run: |
+          for g in pkg/*.gem; do gem push "$g"; done
+        env:
+          GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+          GEM_HOST_OTP_CODE: ${{ secrets.RUBYGEMS_OTP }}
