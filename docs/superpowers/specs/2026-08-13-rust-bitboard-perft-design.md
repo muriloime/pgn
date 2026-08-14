@@ -1,5 +1,15 @@
 # Rust Bitboard Perft Backend (Magic Bitboards) — Design
 
+> **Status (2026-08-14):** The hand-rolled magic/pext engine described
+> below has been replaced by a thin adapter over the `chessie` crate
+> (MPL-2.0). See
+> `docs/superpowers/plans/2026-08-14-chessie-migration.md`. The "Engine
+> details (magic bitboards)" section is retained as the historical
+> design rationale for the since-removed hand-rolled engine; the shipped
+> engine is now `chessie` via the `pgn2-bitboard` adapter. The Ruby API
+> surface, FEN-keyed boundary, and global constraints below are
+> unchanged.
+
 **Goal:** Fast perft numbers, as the primary objective. A thin
 legal-move Ruby API is a secondary byproduct. Ship as a *required
 compiled Rust extension* distributed via **precompiled platform gems**
@@ -33,14 +43,12 @@ local development. No pure-Ruby fallback for the shipped path.
 
 A Rust workspace at `ext/pgn2_native/` with two crates:
 
-1. `pgn2-bitboard` (**lib**, no Ruby dependency): the chess engine.
-   Board = 12 `u64` piece bitboards + side-to-move + castling rights +
-   ep square + halfmove clock + fullmove number. Magic bitboards for
-   slider attacks. make/unmake on a stack (unmake, not copy-make, to
-   stay allocation-free — important for perft nps). Methods:
-   `perft(depth)`, `legal_moves()`, `legal?(uci)`. **Unit-testable in
-   pure Rust** (`cargo test`) against published perft values — no Ruby
-   in the loop.
+1. `pgn2-bitboard` (**lib**, no Ruby dependency): a thin adapter over
+   the `chessie` crate (MPL-2.0). `Board` wraps `chessie::Game`; `perft`
+   and `legal_moves` delegate; `Move`/`MoveList`/`uci_parse` expose the
+   small surface the binding consumes. No chess logic lives in this
+   crate — `chessie` is the engine. **Unit-testable in pure Rust**
+   (`cargo test`) against published perft values — no Ruby in the loop.
 
 2. `pgn2_native` (**cdylib**): the magnus bindings, the only crate that
    touches Ruby. Exposes `PGN::Bitboard::Engine` (constructed from a FEN

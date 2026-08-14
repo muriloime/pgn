@@ -332,13 +332,15 @@ source (or a checkout), compile it with `bundle exec rake compile`.
 ## Native perft engine
 
 `pgn2` ships a Rust bitboard engine (`PGN::Bitboard::Engine`)
-exposed through a thin Ruby API. It targets fast perft numbers using
-[BMI2 `pext`][pext] slider attack tables on x86-64 (with a ray-walker
-fallback elsewhere) and is fully separate from the pure-Ruby 0x88
+exposed through a thin Ruby API. It targets fast perft numbers via the
+[`chessie`][chessie] crate (MPL-2.0; magic-bitboard move generation with
+checkmask/pinmask legality) wrapped by a small adapter, and is fully
+separate from the pure-Ruby 0x88
 `PGN::Board`/`PGN::Notation`/`PGN::MoveCalculator` — those stay
-byte-identical and untouched.
+byte-identical and untouched. See `NOTICE.md` for the `chessie` license
+attribution; the gem's own code remains MIT.
 
-[pext]: https://www.felixcloutier.com/x86/pext
+[chessie]: https://crates.io/crates/chessie
 
 ```ruby
 require "pgn"

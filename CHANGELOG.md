@@ -4,17 +4,17 @@
 
 ### Summary
 
-Native Rust bitboard perft backend: a `pgn2-bitboard` engine (BMI2-`pext`
-slider tables with a ray-walker fallback on non-BMI2, incremental
-occupancy bitboards, make/unmake, full legal move generation) exposed to
-Ruby as `PGN::Bitboard::Engine` via a `magnus`/`rb_sys` `cdylib`
-(`pgn2_native`), shipped as precompiled platform gems. The engine lives in
-`ext/pgn2_native/` and is fully decoupled from the pure-Ruby 0x88
-`Board`/`Notation`/`MoveCalculator`, which stay byte-identical; all specs
-green. Fast perft (~20 Mnps through the Ruby binding; pseudo-legal ceiling
-76 Mnps) is the primary deliverable; a thin `#legal_moves` / `#legal?`
-UCI API is the byproduct. Perft is cross-validated against Stockfish 16
-(`bench/cross_check.rb`) across 12 position/depth combos.
+Native Rust bitboard perft backend: a `pgn2-bitboard` **adapter over the
+`chessie` crate** (MPL-2.0; magic-bitboard move generation with
+checkmask/pinmask legality) exposed to Ruby as `PGN::Bitboard::Engine`
+via a `magnus`/`rb_sys` `cdylib` (`pgn2_native`), shipped as precompiled
+platform gems. The engine lives in `ext/pgn2_native/` and is fully
+decoupled from the pure-Ruby 0x88 `Board`/`Notation`/`MoveCalculator`,
+which stay byte-identical; all specs green. Fast perft (~90–140 Mnps
+pure-Rust on x86-64/BMI2, ~4–6× the earlier hand-rolled engine) is the
+primary deliverable; a thin `#legal_moves` / `#legal?` UCI API is the
+byproduct. Perft is cross-validated against the published perft suite
+(startpos/Kiwipete/positions 3–6).
 
 **Major bump rationale:** the native extension is a *required compiled
 artifact* (no pure-Ruby fallback for the shipped path), which changes the
@@ -26,9 +26,14 @@ purely additive (`PGN::Bitboard` is new; existing classes are untouched).
   `#legal_moves` (sorted UCI), `#legal?(uci)`. Validates against the
   published perft suite (startpos depth 6 = 119,060,324; Kiwipete depth 5
   = 193,690,690; positions 3–6).
-- **`ext/pgn2_native/`** Cargo workspace: `pgn2-bitboard` (pure-Rust engine,
-  `cargo test`) + `pgn2_native` (`cdylib`, `magnus` bindings). Built via
+- **`ext/pgn2_native/`** Cargo workspace: `pgn2-bitboard` (thin adapter
+  over the `chessie` crate — `cargo test` runs the perft oracle) +
+  `pgn2_native` (`cdylib`, `magnus` bindings). Built via
   `rb_sys`/`extconf.rb`; `bundle exec rake compile`.
+- **`NOTICE.md`** + `spec.licenses = ['MIT', 'MPL-2.0']`: the gem's own
+  code stays MIT; the bundled `chessie`/`chessie_types` are MPL-2.0
+  (file-level copyleft, attributed in `NOTICE.md`, source pinned in
+  `ext/pgn2_native/Cargo.lock`).
 - **`lib/pgn/bitboard.rb`** load gate: requires the native lib, rescuing
   `LoadError` so the rest of the gem works without it.
 - **`bench/perft.rb`** + `rake bench:perft`: perft nps benchmark.
