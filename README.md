@@ -324,14 +324,14 @@ Or install it yourself as:
 
     $ gem install pgn2
 
-The optional native perft backend (see [Native perft engine](#native-perft-engine-optional))
-ships as prebuilt platform gems, so installing `pgn2` pulls a binary for your
-platform — no Rust toolchain required. When building from source (or a
-checkout), compile it with `bundle exec rake compile`.
+The native perft backend (see [Native perft engine](#native-perft-engine))
+ships with the gem as prebuilt platform gems, so installing `pgn2` pulls a
+binary for your platform — no Rust toolchain required. When building from
+source (or a checkout), compile it with `bundle exec rake compile`.
 
-## Native perft engine (optional)
+## Native perft engine
 
-`pgn2` ships an optional Rust bitboard engine (`PGN::Bitboard::Engine`)
+`pgn2` ships a Rust bitboard engine (`PGN::Bitboard::Engine`)
 exposed through a thin Ruby API. It targets fast perft numbers using
 [BMI2 `pext`][pext] slider attack tables on x86-64 (with a ray-walker
 fallback elsewhere) and is fully separate from the pure-Ruby 0x88
