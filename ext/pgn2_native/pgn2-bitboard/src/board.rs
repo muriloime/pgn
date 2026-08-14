@@ -2,7 +2,7 @@ use crate::moves::{Move, Flag};
 use crate::piece::{Color, PieceKind};
 use crate::square::{Bitboard, Square};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Board {
     /// pieces[color_index][piece_kind_index] = bitboard of that set.
     pub pieces: [[Bitboard; 6]; 2],

@@ -1,5 +1,5 @@
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Color { White, Black }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Color { #[default] White, Black }
 impl Color {
     pub const fn opposite(self) -> Self {
         match self { Color::White => Color::Black, Color::Black => Color::White }

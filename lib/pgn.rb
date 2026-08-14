@@ -11,6 +11,7 @@ require 'pgn/parser'
 require 'pgn/position'
 require 'pgn/serializer'
 require 'pgn/version'
+require 'pgn/bitboard'
 
 module PGN
   # @param pgn [String] a pgn representation of one or more chess games
