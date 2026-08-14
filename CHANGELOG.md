@@ -1,17 +1,25 @@
 # Changelog
 
-## Unreleased
+## 2.0.0 (unreleased)
 
 ### Summary
 
-Native Rust bitboard perft backend: a `pgn2-bitboard` engine (magic/BMI2-
-`pext` slider tables, make/unmake, full legal move generation) exposed to
+Native Rust bitboard perft backend: a `pgn2-bitboard` engine (BMI2-`pext`
+slider tables with a ray-walker fallback on non-BMI2, incremental
+occupancy bitboards, make/unmake, full legal move generation) exposed to
 Ruby as `PGN::Bitboard::Engine` via a `magnus`/`rb_sys` `cdylib`
 (`pgn2_native`), shipped as precompiled platform gems. The engine lives in
 `ext/pgn2_native/` and is fully decoupled from the pure-Ruby 0x88
 `Board`/`Notation`/`MoveCalculator`, which stay byte-identical; all specs
-green. Fast perft (≈11–16 Mnps through the Ruby binding) is the primary
-deliverable; a thin `#legal_moves` / `#legal?` UCI API is the byproduct.
+green. Fast perft (~20 Mnps through the Ruby binding; pseudo-legal ceiling
+76 Mnps) is the primary deliverable; a thin `#legal_moves` / `#legal?`
+UCI API is the byproduct. Perft is cross-validated against Stockfish 16
+(`bench/cross_check.rb`) across 12 position/depth combos.
+
+**Major bump rationale:** the native extension is a *required compiled
+artifact* (no pure-Ruby fallback for the shipped path), which changes the
+install/packaging contract — hence 2.0.0 even though the Ruby API is
+purely additive (`PGN::Bitboard` is new; existing classes are untouched).
 
 ### Added
 - **`PGN::Bitboard::Engine`** (native): `Engine.new(fen)`, `#perft(depth)`,
