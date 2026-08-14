@@ -110,5 +110,24 @@ Out of scope for now: SVG rendering, Chess960, Shredder-FEN, FRC castling.
 - [ ] Lazy position iterator instead of eagerly building `Game#positions`.
 - [ ] Precomputed knight/king attack masks for SAN generation and legal-move
       checks.
-- [ ] Optional bitboard / C-extension backend for move generation / perft,
-      with a pure-Ruby fallback.
+- [x] Optional bitboard / C-extension backend for move generation / perft,
+      with a pure-Ruby fallback. *(done on `feat/rust-bitboard-perft` — see
+      `docs/superpowers/specs/2026-08-13-rust-bitboard-perft-design.md`;
+      `PGN::Bitboard::Engine#perft`/`#legal_moves`/`#legal?` via a Rust
+      `cdylib` shipped as precompiled platform gems.)*
+  - [ ] **Perft speed: pin-aware legal move generation.** Current legal perft
+        is ~20 Mnps (release, LTO); pseudo-legal perft is 76 Mnps, so the
+        per-move `in_check` (`is_attacked`) scan is ~3.7× of the runtime and
+        the whole gap to fast engines. Implementing pin-aware legality
+        (compute checkers + pinned pieces once per node, validate moves
+        without make/unmake, true bulk-count at depth 1) targets ~50–70 Mnps
+        (~2× off Stockfish). Keep the make/unmake path for the Ruby
+        `#legal_moves` API; only the `perft` hot path switches. Validated by
+        the existing perft oracle vs Stockfish (`bench/cross_check.rb`).
+  - [ ] Bulk-count at depth 1 (small, low-risk) and per-node `MoveList` buffer
+        reuse (avoid the per-node `Vec<Move>` alloc) — incremental wins below
+        the pin-aware rewrite.
+  - [ ] aarch64 (non-BMI2) falls back to the ray-walker sliders; add magic
+        bitboard tables there if its perft nps matters.
+  - [ ] Verify the `release-gems.yml` cross-compile (rake-compiler-dock) for
+        x86_64/aarch64 linux+darwin before relying on prebuilt gems.
