@@ -38,6 +38,7 @@ pub fn init() {
             BP[sq as usize] = bp;
         }
         INIT = true;
+        crate::magics::build_all();
     }
 }
 
@@ -92,8 +93,10 @@ fn ray_attacks(sq: Square, occ: Bitboard, dirs: &[(i32, i32)]) -> Bitboard {
     out
 }
 
-pub fn rook_attacks(sq: Square, occ: Bitboard) -> Bitboard { ray_attacks(sq, occ, &ROOK_DIRS) }
-pub fn bishop_attacks(sq: Square, occ: Bitboard) -> Bitboard { ray_attacks(sq, occ, &BISHOP_DIRS) }
+pub fn rook_attacks_ref(sq: Square, occ: Bitboard) -> Bitboard { ray_attacks(sq, occ, &ROOK_DIRS) }
+pub fn bishop_attacks_ref(sq: Square, occ: Bitboard) -> Bitboard { ray_attacks(sq, occ, &BISHOP_DIRS) }
+pub fn rook_attacks(sq: Square, occ: Bitboard) -> Bitboard { crate::magics::rook_attacks(sq, occ) }
+pub fn bishop_attacks(sq: Square, occ: Bitboard) -> Bitboard { crate::magics::bishop_attacks(sq, occ) }
 
 #[cfg(test)]
 mod tests {
