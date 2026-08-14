@@ -1,0 +1,13 @@
+[package]
+name = "chessie-smoke"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+chessie = "*"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
