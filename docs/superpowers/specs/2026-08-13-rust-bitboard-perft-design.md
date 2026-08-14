@@ -121,12 +121,21 @@ keeps chess logic testable without Ruby and the bridge trivial/fast.
   `occupied` derived.
 - Precomputed knight/king attack tables; pawn attack tables; the 8 ray
   directions.
-- **Magic bitboards:** per square × ray-group (rook 4 dirs, bishop 4
-  dirs): precompute mask + magic + attack table indexed by
-  `((occupancy & mask) * magic) >> shift`. Use **verified magic
-  numbers** from the chessprogramming wiki / Stockfish rather than
-  self-searching, at least initially, to cut the trickiest
-  debugging surface.
+- **Slider attacks — BMI2 `pext` (implementation pivot):** the original
+  design called for magic bitboards with verified precomputed magic
+  numbers. Implementation instead uses the hardware `pext` instruction
+  to build a perfect bit-extract index (`((occ & mask) * magic) >> shift` is
+  replaced by `_pext_u64(occ & mask, mask)`), with a ray-walker fallback
+  on non-BMI2 targets (e.g. aarch64). Reasons: (1) random-candidate magic
+  search at `shift = 64 - bits` is effectively non-converging for a 12-bit
+  rook mask (~7.4M different-class subset pairs into 4096 bins → thousands
+  of collisions per trial); only specially-constructed magics work, and
+  transcribing published magics is a debugging hazard; (2) `pext` is
+  deterministic, search-free, instant to build, and collision-free by
+  construction; (3) the deploy target (Azure x86-64 Docker) has BMI2. The
+  magic-vs-reference validation tests are kept (now validating pext vs the
+  ray walker) for every square × subset. The public Rust/Ruby surface is
+  unchanged.
 - Move generation: pseudo-legal from attack sets; legality by
   **make + king-not-in-check filter** first (correctness-first,
   simplest to get right), then optimize to pin-aware generation if
@@ -136,8 +145,10 @@ keeps chess logic testable without Ruby and the bridge trivial/fast.
 
 ## Risks and honest notes
 
-- Magic-bitboard setup is the trickiest part; mitigated by reusing
-  well-known verified magics rather than searching our own.
+- Slider setup was originally the trickiest part; the `pext` pivot
+  (above) removes both the magic-search and the transcription hazard.
+  On non-BMI2 targets the ray-walker fallback is correct but slower —
+  add magic tables for aarch64 later if its perft nps matters.
 - The precompiled-gem CI (rake-compiler-dock) is real setup work;
   budget it as its own task. Until live, deploy via 3a source-build
   (documented interim).
