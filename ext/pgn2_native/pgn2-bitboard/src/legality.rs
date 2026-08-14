@@ -30,23 +30,31 @@ impl Board {
         self.is_attacked(self.king_sq(c), c.opposite())
     }
 
-    /// Pseudo-legal moves filtered to legal ones via make + own-king-not-in-check.
-    /// Castling additionally requires the king's start and transit square be
-    /// unattacked (the destination square is verified by the make/in_check pass).
+    /// Pseudo-legal moves filtered to legal ones via make/unmake on a single
+    /// working copy (one clone total, not one per pseudo-move). Castling
+    /// requires the king's start, transit, and destination squares to be
+    /// unattacked in the pre-move position.
     pub fn legal_moves(&self) -> MoveList {
         attacks::init();
-        let mut out = MoveList::new();
         let us = self.side;
         let them = us.opposite();
-        for m in self.gen_pseudo().iter() {
+        let mut b = self.clone();
+        let mut out = MoveList::new();
+        for m in self.gen_pseudo().iter().copied() {
             if m.flag() == Flag::Castle {
-                let (ksq, mid) = castle_path(us, *m);
-                if self.is_attacked(ksq, them) || self.is_attacked(mid, them) { continue; }
+                let (ksq, mid) = castle_path(us, m);
+                if self.is_attacked(ksq, them)
+                    || self.is_attacked(mid, them)
+                    || self.is_attacked(m.to(), them)
+                {
+                    continue;
+                }
             }
-            let mut b = self.clone();
-            let undo = b.make(*m);
-            if !b.in_check(us) { out.push(*m); }
-            b.unmake(*m, undo);
+            let undo = b.make(m);
+            if !b.in_check(us) {
+                out.push(m);
+            }
+            b.unmake(m, undo);
         }
         out
     }

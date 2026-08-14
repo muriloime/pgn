@@ -9,3 +9,11 @@ opt-level = 2
 
 [profile.dev]
 opt-level = 1
+
+# The shipped native gem is built in `release`; squeeze perft nps with LTO
+# and single codegen-unit (longer build, faster code).
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+

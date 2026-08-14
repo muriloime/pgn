@@ -6,6 +6,10 @@ use crate::square::{Bitboard, Square};
 pub struct Board {
     /// pieces[color_index][piece_kind_index] = bitboard of that set.
     pub pieces: [[Bitboard; 6]; 2],
+    /// Incremental occupancy (union of all pieces); O(1) `occupied()`.
+    pub occ: Bitboard,
+    /// Incremental per-color union bitboards; O(1) `white()`/`black()`.
+    pub by_color: [Bitboard; 2],
     pub side: Color,
     /// KQkq bit order: bit0=whiteK, bit1=whiteQ, bit2=blackK, bit3=blackQ.
     pub castling: u8,
@@ -27,17 +31,9 @@ fn ki(k: PieceKind) -> usize { k.index() }
 
 impl Board {
     pub fn piece_bb(&self, c: Color, k: PieceKind) -> Bitboard { self.pieces[ci(c)][ki(k)] }
-    pub fn white(&self) -> Bitboard {
-        let mut b = Bitboard::empty();
-        for k in PieceKind::ALL { b |= self.pieces[ci(Color::White)][ki(k)]; }
-        b
-    }
-    pub fn black(&self) -> Bitboard {
-        let mut b = Bitboard::empty();
-        for k in PieceKind::ALL { b |= self.pieces[ci(Color::Black)][ki(k)]; }
-        b
-    }
-    pub fn occupied(&self) -> Bitboard { self.white() | self.black() }
+    pub fn white(&self) -> Bitboard { self.by_color[Color::White as usize] }
+    pub fn black(&self) -> Bitboard { self.by_color[Color::Black as usize] }
+    pub fn occupied(&self) -> Bitboard { self.occ }
 
     pub fn from_fen(fen: &str) -> Result<Board, String> {
         let mut parts = fen.split_whitespace();
@@ -72,83 +68,108 @@ impl Board {
                 }
             }
         }
-        if rank != 0 || file != 8 { return Err("bad placement dimensions".into()); }
-
-        let side_color = match side { "w" => Color::White, "b" => Color::Black, _ => return Err("bad side".to_string()) };
-        let mut cast = 0u8;
-        for c in castling.chars() {
-            match c {
-                'K' => cast |= 1, 'Q' => cast |= 2,
-                'k' => cast |= 4, 'q' => cast |= 8,
-                '-' => {}
-                _ => return Err("bad castling".to_string()),
+        let mut by_color = [Bitboard::empty(); 2];
+        let mut occ = Bitboard::empty();
+        for c in Color::all() {
+            for k in PieceKind::ALL {
+                let bb = pieces[ci(c)][ki(k)];
+                by_color[ci(c)] |= bb;
+                occ |= bb;
             }
         }
-        let ep = match ep { "-" => None, s => Some(parse_square(s).ok_or("bad ep")?) };
 
-        Ok(Board { pieces, side: side_color, castling: cast, ep, halfmove, fullmove })
+        let side_color = match side {
+            "w" => Color::White,
+            "b" => Color::Black,
+            _ => return Err(format!("bad side: {side}")),
+        };
+        let mut cast = 0u8;
+        for ch in castling.chars() {
+            match ch {
+                'K' => cast |= 0b0001,
+                'Q' => cast |= 0b0010,
+                'k' => cast |= 0b0100,
+                'q' => cast |= 0b1000,
+                '-' => {}
+                _ => return Err(format!("bad castling char: {ch}")),
+            }
+        }
+        let ep = if ep == "-" { None } else { parse_square(ep) };
+        Ok(Board { pieces, occ, by_color, side: side_color, castling: cast, ep, halfmove, fullmove })
     }
 
     pub fn piece_at(&self, sq: Square) -> Option<(Color, PieceKind)> {
-        for c in Color::all() {
-            for k in PieceKind::ALL {
-                if !(self.piece_bb(c, k) & Bitboard::single(sq)).is_empty() {
-                    return Some((c, k));
-                }
+        let bb = Bitboard::single(sq);
+        let c = if !(self.by_color[Color::White as usize] & bb).is_empty() {
+            Color::White
+        } else if !(self.by_color[Color::Black as usize] & bb).is_empty() {
+            Color::Black
+        } else {
+            return None;
+        };
+        for k in PieceKind::ALL {
+            if !(self.pieces[ci(c)][ki(k)] & bb).is_empty() {
+                return Some((c, k));
             }
         }
         None
     }
 
-    fn put(&mut self, c: Color, k: PieceKind, sq: Square) {
-        self.pieces[c as usize][k.index()] |= Bitboard::single(sq);
+    /// Place (c,k) on sq, updating pieces + incremental occ/by_color.
+    fn add(&mut self, c: Color, k: PieceKind, sq: Square) {
+        let b = Bitboard::single(sq);
+        self.pieces[ci(c)][ki(k)] |= b;
+        self.by_color[ci(c)] |= b;
+        self.occ |= b;
     }
-    fn clear(&mut self, sq: Square) {
-        let mask = !Bitboard::single(sq);
-        for c in Color::all() {
-            for k in PieceKind::ALL {
-                self.pieces[c as usize][k.index()] &= mask;
-            }
-        }
+    /// Remove (c,k) from sq, updating pieces + incremental occ/by_color.
+    fn sub(&mut self, c: Color, k: PieceKind, sq: Square) {
+        let b = !Bitboard::single(sq);
+        self.pieces[ci(c)][ki(k)] &= b;
+        self.by_color[ci(c)] &= b;
+        self.occ &= b;
     }
 
     fn rook_squares_for_castle(to: Square) -> (Square, Square) {
         // (rook_from, rook_to) for a king moving to `to`.
-        let f = to.file();
-        let r = to.rank();
-        match f {
-            6 => (Square::from_algebraic(7, r), Square::from_algebraic(5, r)), // O-O: h-file rook -> f-file
-            2 => (Square::from_algebraic(0, r), Square::from_algebraic(3, r)), // O-O-O: a-file rook -> d-file
-            _ => unreachable!("castle to non-castle file"),
+        let rank = to.rank();
+        match to.file() {
+            6 => (Square::from_algebraic(7, rank), Square::from_algebraic(5, rank)), // kingside
+            _ => (Square::from_algebraic(0, rank), Square::from_algebraic(3, rank)), // queenside
         }
     }
 
     pub fn make(&mut self, m: Move) -> Undo {
         let (from, to) = (m.from(), m.to());
         let (color, kind) = self.piece_at(from).expect("make: no mover");
+        let cap = self.piece_at(to);
         let undo = Undo {
-            captured: self.piece_at(to),
+            captured: cap,
             castling: self.castling,
             ep: self.ep,
             halfmove: self.halfmove,
         };
-        self.clear(from);
-        self.clear(to);
-        self.put(color, kind, to);
+
+        self.sub(color, kind, from);
+        if let Some((cap_c, cap_k)) = cap {
+            self.sub(cap_c, cap_k, to);
+        }
+
+        let placed_kind = match m.flag() {
+            Flag::Promotion => m.promo().expect("promo"),
+            _ => kind,
+        };
+        self.add(color, placed_kind, to);
 
         match m.flag() {
             Flag::EnPassant => {
                 let cap_sq = Square::from_algebraic(to.file(), from.rank());
-                self.clear(cap_sq);
+                self.sub(color.opposite(), PieceKind::Pawn, cap_sq);
             }
             Flag::Castle => {
                 let (rf, rt) = Self::rook_squares_for_castle(to);
-                self.clear(rf);
-                self.put(color, PieceKind::Rook, rt);
-            }
-            Flag::Promotion => {
-                self.clear(to);
-                self.put(color, m.promo().expect("promo"), to);
+                self.sub(color, PieceKind::Rook, rf);
+                self.add(color, PieceKind::Rook, rt);
             }
             _ => {}
         }
@@ -171,7 +192,7 @@ impl Board {
                 _ => {}
             }
         }
-        self.halfmove = if kind == PieceKind::Pawn || undo.captured.is_some() { 0 } else { self.halfmove + 1 };
+        self.halfmove = if kind == PieceKind::Pawn || cap.is_some() { 0 } else { self.halfmove + 1 };
         if color == Color::Black { self.fullmove += 1; }
         self.side = self.side.opposite();
         undo
@@ -187,21 +208,24 @@ impl Board {
         } else {
             self.piece_at(to).map(|(_, k)| k).expect("unmake: no mover")
         };
-        self.clear(to);
-        self.put(color, kind, from);
+        // The piece actually sitting on `to` is the promoted piece for a
+        // promotion, else the mover itself.
+        let at_to_kind = if m.is_promotion() { m.promo().expect("promo") } else { kind };
+        self.sub(color, at_to_kind, to);
+        self.add(color, kind, from);
         if let Some((cap_c, cap_k)) = undo.captured {
-            self.put(cap_c, cap_k, to);
+            self.add(cap_c, cap_k, to);
         }
 
         match m.flag() {
             Flag::EnPassant => {
                 let cap_sq = Square::from_algebraic(to.file(), from.rank());
-                self.put(color.opposite(), PieceKind::Pawn, cap_sq);
+                self.add(color.opposite(), PieceKind::Pawn, cap_sq);
             }
             Flag::Castle => {
                 let (rf, rt) = Self::rook_squares_for_castle(to);
-                self.clear(rt);
-                self.put(color, PieceKind::Rook, rf);
+                self.sub(color, PieceKind::Rook, rt);
+                self.add(color, PieceKind::Rook, rf);
             }
             _ => {}
         }
