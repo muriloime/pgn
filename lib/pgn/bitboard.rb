@@ -5,4 +5,8 @@
 # extension is absent (e.g. running from a source checkout without `rake
 # compile`), the load fails silently so the rest of the gem still works. Code
 # that calls PGN::Bitboard::Engine will raise NameError naturally.
-require "pgn2_native/pgn2_native" rescue LoadError
+begin
+  require 'pgn2_native/pgn2_native'
+rescue StandardError
+  LoadError
+end
