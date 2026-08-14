@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
   spec.description   = 'A PGN parser and FEN generator for Ruby'
   spec.summary       = 'A PGN parser for Ruby'
   spec.homepage      = 'https://github.com/muriloime/pgn'
-  spec.license       = 'MIT'
+  spec.licenses      = ['MIT', 'MPL-2.0']
   spec.required_ruby_version = '>= 3.0'
 
   spec.metadata = {
