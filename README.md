@@ -359,6 +359,19 @@ engine.legal?("e2e5")  # => false
 
 Benchmark it with `bundle exec rake bench:perft` (after `rake compile`).
 
+The engine is also reachable directly from a `PGN::Position` via a FEN
+round-trip, so you don't have to build the `Engine` by hand:
+
+```ruby
+PGN::Position.start.perft(4)       # => 197281
+PGN::Position.start.legal_moves   # => ["a2a3", "a2a4", ..., "h2h3", "h2h4"] (sorted UCI)
+```
+
+Both delegate to `PGN::Bitboard::Engine.new(position.to_fen.to_s)` and
+require the compiled extension — they raise `NameError` if it is absent.
+`#legal_moves` is ~30 µs/call on a middlegame position (see
+`bench/legal_moves.rb`), so per-position enumeration is practical.
+
 ### Distribution
 
 The native extension is distributed as **precompiled platform gems**
@@ -374,7 +387,9 @@ ENV PATH=/usr/local/cargo/bin:$PATH
 ```
 
 The final runtime image needs nothing extra. If the extension is absent,
-`PGN::Bitboard` is simply undefined and the rest of the gem works as before.
+`PGN::Bitboard` is undefined and the pure-Ruby gem works as before; the
+`PGN::Position#perft` and `#legal_moves` delegations, however, raise
+`NameError` in that case (no Ruby fallback).
 
 ## Contributing
 

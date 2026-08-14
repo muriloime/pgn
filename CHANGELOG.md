@@ -35,6 +35,21 @@ purely additive (`PGN::Bitboard` is new; existing classes are untouched).
 - **CI**: `.github/workflows/native.yml` (`cargo test` + `rake compile` +
   `rspec`) and `.github/workflows/release-gems.yml` (cross-compile
   prebuilt platform gems via `rake-compiler-dock`).
+- **`PGN::Position#perft(depth)`** and **`PGN::Position#legal_moves`**
+  (sorted UCI): FEN-round-trip delegations to `PGN::Bitboard::Engine`
+  (`Engine.new(position.to_fen.to_s)`), so perft/legal-move enumeration is
+  available directly on a `Position` without building the `Engine` by hand.
+  `#legal_moves` is ~30 µs/call on a middlegame position, measured by
+  `bench/legal_moves.rb`. Both raise `NameError` if the extension is absent.
+- **`bench/legal_moves.rb`**: throughput benchmark for the `Position#legal_moves`
+  delegation (FEN build + `Engine.new` + native gen + string materialization).
+
+### Fixed
+- `attacks::init()` now initializes its attack tables through
+  `std::sync::Once` (was a bare `static mut bool` flipped under `unsafe` — a
+  data race / UB). No behavior change; `init()` remains idempotent. Removed the
+  three now-redundant per-method `attacks::init()` calls in the magnus binding
+  (`pgn2_native`), since the delegated crate functions self-initialize.
 
 ### Distribution note
 
