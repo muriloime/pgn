@@ -19,6 +19,10 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-src
+      - run: bundle exec rake compile
       - run: bundle exec rspec --format documentation
 
   rubocop:
