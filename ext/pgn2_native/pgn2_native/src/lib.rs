@@ -22,19 +22,16 @@ impl Engine {
     }
 
     fn perft(&self, depth: u32) -> u64 {
-        pgn2_bitboard::attacks::init();
         self.0.borrow().perft(depth)
     }
 
     fn legal_moves_ruby(&self) -> Vec<String> {
-        pgn2_bitboard::attacks::init();
         let mut v: Vec<String> = self.0.borrow().legal_moves().iter().map(|m| m.to_uci()).collect();
         v.sort();
         v
     }
 
     fn legal_p(&self, uci: String) -> bool {
-        pgn2_bitboard::attacks::init();
         match pgn2_bitboard::moves::uci_parse(&uci) {
             Some(parsed) => self.0.borrow().legal_moves().iter().any(|m| m.same_target(parsed)),
             None => false,

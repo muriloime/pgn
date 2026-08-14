@@ -1,17 +1,17 @@
 use crate::square::{Bitboard, Square};
+use std::sync::Once;
 
 static mut KNIGHT: [Bitboard; 64] = [Bitboard::EMPTY; 64];
 static mut KING: [Bitboard; 64] = [Bitboard::EMPTY; 64];
 static mut WP: [Bitboard; 64] = [Bitboard::EMPTY; 64];
 static mut BP: [Bitboard; 64] = [Bitboard::EMPTY; 64];
-static mut INIT: bool = false;
+static INIT: Once = Once::new();
 
 fn valid(f: i32, r: i32) -> bool { (0..8).contains(&f) && (0..8).contains(&r) }
 fn bb(f: i32, r: i32) -> Bitboard { Bitboard::single(Square::from_algebraic(f as u8, r as u8)) }
 
 pub fn init() {
-    unsafe {
-        if INIT { return; }
+    INIT.call_once(|| unsafe {
         for sq in 0..64u8 {
             let s = Square(sq);
             let f = s.file() as i32; let r = s.rank() as i32;
@@ -37,9 +37,8 @@ pub fn init() {
             if valid(f+1, r-1) { bp |= bb(f+1, r-1); }
             BP[sq as usize] = bp;
         }
-        INIT = true;
         crate::magics::build_all();
-    }
+    });
 }
 
 pub fn knight(s: Square) -> Bitboard { unsafe { KNIGHT[s.0 as usize] } }
