@@ -1,5 +1,8 @@
 use crate::piece::PieceKind;
 use crate::square::Square;
+use crate::attacks;
+use crate::board::Board;
+use crate::piece::Color;
 
 /// 16-bit move encoding: `to:6 | from:6 | special:4`.
 ///
@@ -131,5 +134,136 @@ mod tests {
         list.push(Move::new(Square::new(2), Square::new(3), Flag::Normal));
         assert_eq!(list.len(), 2);
         assert_eq!(list.iter().count(), 2);
+    }
+
+    use crate::board::Board;
+
+    #[test]
+    fn startpos_has_20_pseudo_moves() {
+        crate::attacks::init();
+        let b = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        assert_eq!(b.gen_pseudo().len(), 20);
+    }
+
+    #[test]
+    fn kiwipete_has_48_pseudo_moves() {
+        crate::attacks::init();
+        let b = Board::from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap();
+        assert_eq!(b.gen_pseudo().len(), 48);
+    }
+}
+
+impl Board {
+    pub fn gen_pseudo(&self) -> MoveList {
+        attacks::init();
+        let mut list = MoveList::new();
+        let us = self.side;
+        let occ = self.occupied();
+        let own = if us == Color::White { self.white() } else { self.black() };
+        let enemy = if us == Color::White { self.black() } else { self.white() };
+
+        for from in self.piece_bb(us, PieceKind::Pawn).iter() {
+            gen_pawn(self, us, from, occ, enemy, &mut list);
+        }
+        for from in self.piece_bb(us, PieceKind::Knight).iter() {
+            for to in (attacks::knight(from) & !own).iter() {
+                list.push(Move::new(from, to, Flag::Normal));
+            }
+        }
+        for from in self.piece_bb(us, PieceKind::Bishop).iter() {
+            for to in (attacks::bishop_attacks(from, occ) & !own).iter() {
+                list.push(Move::new(from, to, Flag::Normal));
+            }
+        }
+        for from in self.piece_bb(us, PieceKind::Rook).iter() {
+            for to in (attacks::rook_attacks(from, occ) & !own).iter() {
+                list.push(Move::new(from, to, Flag::Normal));
+            }
+        }
+        for from in self.piece_bb(us, PieceKind::Queen).iter() {
+            let att = (attacks::rook_attacks(from, occ) | attacks::bishop_attacks(from, occ)) & !own;
+            for to in att.iter() {
+                list.push(Move::new(from, to, Flag::Normal));
+            }
+        }
+        for from in self.piece_bb(us, PieceKind::King).iter() {
+            for to in (attacks::king(from) & !own).iter() {
+                list.push(Move::new(from, to, Flag::Normal));
+            }
+            gen_castle(self, us, from, occ, &mut list);
+        }
+        list
+    }
+}
+
+fn gen_pawn(b: &Board, us: Color, from: Square, occ: crate::square::Bitboard, enemy: crate::square::Bitboard, list: &mut MoveList) {
+    use crate::square::{Bitboard, Square};
+    let (push, start_rank, promo_rank) = match us {
+        Color::White => (1i32, 1u8, 7u8),
+        Color::Black => (-1i32, 6u8, 0u8),
+    };
+    let f = from.file() as i32;
+    let r = from.rank() as i32;
+
+    // single + double push
+    let one = Square::from_algebraic(f as u8, (r + push) as u8);
+    if (occ & Bitboard::single(one)).is_empty() {
+        if one.rank() == promo_rank {
+            push_promos(list, from, one);
+        } else {
+            list.push(Move::new(from, one, Flag::Normal));
+            if from.rank() == start_rank {
+                let two = Square::from_algebraic(f as u8, (r + 2 * push) as u8);
+                if (occ & Bitboard::single(two)).is_empty() {
+                    list.push(Move::new(from, two, Flag::DoublePawn));
+                }
+            }
+        }
+    }
+
+    // captures
+    let att = if us == Color::White { attacks::wpawn_att(from) } else { attacks::bpawn_att(from) };
+    for to in (att & enemy).iter() {
+        if to.rank() == promo_rank { push_promos(list, from, to); }
+        else { list.push(Move::new(from, to, Flag::Normal)); }
+    }
+
+    // en passant
+    if let Some(ep) = b.ep {
+        if !(att & Bitboard::single(ep)).is_empty() {
+            list.push(Move::new(from, ep, Flag::EnPassant));
+        }
+    }
+}
+
+fn push_promos(list: &mut MoveList, from: Square, to: Square) {
+    for k in [PieceKind::Knight, PieceKind::Bishop, PieceKind::Rook, PieceKind::Queen] {
+        list.push(Move::promotion(from, to, k));
+    }
+}
+
+fn gen_castle(b: &Board, us: Color, from: Square, occ: crate::square::Bitboard, list: &mut MoveList) {
+    use crate::square::{Bitboard, Square};
+    let rank = if us == Color::White { 0u8 } else { 7u8 };
+    let ksq = Square::from_algebraic(4, rank);
+    if from != ksq { return; }
+    let (can_k, can_q) = match us {
+        Color::White => (b.castling & 1 != 0, b.castling & 2 != 0),
+        Color::Black => (b.castling & 4 != 0, b.castling & 8 != 0),
+    };
+    if can_k {
+        let between = Bitboard::single(Square::from_algebraic(5, rank))
+            | Bitboard::single(Square::from_algebraic(6, rank));
+        if (occ & between).is_empty() {
+            list.push(Move::new(ksq, Square::from_algebraic(6, rank), Flag::Castle));
+        }
+    }
+    if can_q {
+        let between = Bitboard::single(Square::from_algebraic(3, rank))
+            | Bitboard::single(Square::from_algebraic(2, rank))
+            | Bitboard::single(Square::from_algebraic(1, rank));
+        if (occ & between).is_empty() {
+            list.push(Move::new(ksq, Square::from_algebraic(2, rank), Flag::Castle));
+        }
     }
 }
