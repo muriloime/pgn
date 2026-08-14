@@ -100,6 +100,19 @@ module PGN
       player == :white ? :black : :white
     end
 
+    # The perft node count at +depth+ from this position, computed by the
+    # native bitboard engine via a FEN round-trip. Requires the compiled
+    # native extension (the shipped gem); raises NameError if it is absent.
+    #
+    # @param depth [Integer] search depth, >= 0
+    # @return [Integer]
+    #
+    def perft(depth)
+      raise ArgumentError, 'depth must be a non-negative Integer' unless depth.is_a?(Integer) && depth >= 0
+
+      PGN::Bitboard::Engine.new(to_fen.to_s).perft(depth)
+    end
+
     def inspect
       "\n#{board.inspect}"
     end

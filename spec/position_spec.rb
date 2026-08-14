@@ -175,3 +175,29 @@ describe PGN::Position do
     end
   end
 end
+
+RSpec.describe PGN::Position, '#perft' do
+  it 'returns 1 at depth 0 for the start position' do
+    expect(PGN::Position.start.perft(0)).to eq(1)
+  end
+
+  it 'matches published startpos perft values' do
+    p = PGN::Position.start
+    expect(p.perft(1)).to eq(20)
+    expect(p.perft(2)).to eq(400)
+    expect(p.perft(3)).to eq(8_902)
+    expect(p.perft(4)).to eq(197_281)
+  end
+
+  it 'matches published Kiwipete perft values' do
+    fen = 'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1'
+    p = PGN::FEN.new(fen).to_position
+    expect(p.perft(1)).to eq(48)
+    expect(p.perft(2)).to eq(2_039)
+    expect(p.perft(3)).to eq(97_862)
+  end
+
+  it 'raises ArgumentError on negative depth' do
+    expect { PGN::Position.start.perft(-1) }.to raise_error(ArgumentError)
+  end
+end
