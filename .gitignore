@@ -22,3 +22,8 @@ tags
 .worktrees/
 ext/pgn2_native/target
 lib/pgn2_native
+
+# Throwaway experiment crates (chessie/chess smoke tests) — never ship in the gem.
+/exp/
+# Cargo build artifacts anywhere.
+/target/
