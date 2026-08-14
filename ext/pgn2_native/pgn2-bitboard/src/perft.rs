@@ -1,72 +1,18 @@
-use crate::board::Board;
-use crate::moves::{Flag, MoveList};
-use crate::square::Square;
-
-impl Board {
-    /// Perft (full-width legal move count) to `depth`.
-    ///
-    /// Fast path: pseudo-gen + make/unmake on a single working board (one clone
-    /// total, not one per move) with bulk-counting at depth 1. Legality is
-    /// tested by making the move and checking the own king is not in check;
-    /// castling also requires the king's start/transit/destination squares to
-    /// be unattacked in the pre-move position.
-    pub fn perft(&self, depth: u32) -> u64 {
-        crate::attacks::init();
-        let mut b = self.clone();
-        b.perft_rec(depth)
-    }
-
-    fn perft_rec(&mut self, depth: u32) -> u64 {
-        if depth == 0 {
-            return 1;
-        }
-        let list = self.gen_pseudo();
-        let us = self.side;
-        let them = us.opposite();
-        let mut nodes = 0u64;
-        for m in list.iter().copied() {
-            if m.flag() == Flag::Castle {
-                let (ksq, mid) = castle_path(us, m);
-                if self.is_attacked(ksq, them)
-                    || self.is_attacked(mid, them)
-                    || self.is_attacked(m.to(), them)
-                {
-                    continue;
-                }
-            }
-            let undo = self.make(m);
-            if self.in_check(us) {
-                self.unmake(m, undo);
-                continue;
-            }
-            if depth == 1 {
-                nodes += 1;
-            } else {
-                nodes += self.perft_rec(depth - 1);
-            }
-            self.unmake(m, undo);
-        }
-        nodes
-    }
-}
-
-fn castle_path(us: crate::piece::Color, m: crate::moves::Move) -> (Square, Square) {
-    let rank = if us == crate::piece::Color::White { 0u8 } else { 7u8 };
-    let ksq = Square::from_algebraic(4, rank);
-    match m.to() {
-        s if s == Square::from_algebraic(6, rank) => (ksq, Square::from_algebraic(5, rank)),
-        _ => (ksq, Square::from_algebraic(3, rank)),
-    }
-}
+//! Perft oracle — the published node counts are the test. The chess
+//! logic lives in `chessie`; this file only exercises the adapter's
+//! `Board::from_fen` + `Board::perft` end-to-end in pure Rust (no Ruby).
 
 #[cfg(test)]
 mod tests {
     use crate::board::Board;
 
-    struct Case { fen: &'static str, depth: u32, nodes: u64 }
+    struct Case {
+        fen: &'static str,
+        depth: u32,
+        nodes: u64,
+    }
 
     fn run(c: Case) {
-        crate::attacks::init();
         let b = Board::from_fen(c.fen).unwrap();
         assert_eq!(b.perft(c.depth), c.nodes, "fen={} depth={}", c.fen, c.depth);
     }
@@ -129,16 +75,7 @@ mod tests {
         run(Case { fen: k, depth: 5, nodes: 193690690 });
     }
 
-    #[test]
-    fn make_unmake_symmetry_via_perft() {
-        crate::attacks::init();
-        let f = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
-        let mut b = Board::from_fen(f).unwrap();
-        let before = b.clone();
-        for m in b.legal_moves().iter() {
-            let undo = b.make(*m);
-            b.unmake(*m, undo);
-            assert_eq!(b, before, "unmake diverged after move {:?}", m);
-        }
-    }
+    // The old `make_unmake_symmetry_via_perft` test is intentionally
+    // removed: it exercised the hand-rolled make/unmake internals, which
+    // no longer exist. chessie's own test suite covers its make/unmake.
 }
