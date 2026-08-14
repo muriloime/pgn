@@ -113,6 +113,17 @@ module PGN
       PGN::Bitboard::Engine.new(to_fen.to_s).perft(depth)
     end
 
+    # All legal moves from this position as sorted UCI strings
+    # (e.g. "e2e4", "e1g1" for castling, "e7e8q" for promotion), computed
+    # by the native bitboard engine via a FEN round-trip. Requires the
+    # compiled native extension; raises NameError if it is absent.
+    #
+    # @return [Array<String>] sorted lexicographically
+    #
+    def legal_moves
+      PGN::Bitboard::Engine.new(to_fen.to_s).legal_moves
+    end
+
     def inspect
       "\n#{board.inspect}"
     end

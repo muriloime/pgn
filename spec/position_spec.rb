@@ -201,3 +201,28 @@ RSpec.describe PGN::Position, '#perft' do
     expect { PGN::Position.start.perft(-1) }.to raise_error(ArgumentError)
   end
 end
+
+RSpec.describe PGN::Position, '#legal_moves' do
+  it 'lists 20 legal moves from the start position' do
+    expect(PGN::Position.start.legal_moves.length).to eq(20)
+  end
+
+  it 'returns sorted UCI strings matching the UCI format' do
+    moves = PGN::Position.start.legal_moves
+    expect(moves).to eq(moves.sort)
+    expect(moves).to all(match(/\A[a-h][1-8][a-h][1-8][qrbn]?\z/))
+  end
+
+  it 'matches the engine direct output for the same FEN (delegation equivalence)' do
+    fen = 'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1'
+    pos = PGN::FEN.new(fen).to_position
+    expect(pos.legal_moves).to eq(PGN::Bitboard::Engine.new(fen).legal_moves)
+  end
+
+  it 'includes a promotion UCI when one is legal' do
+    # White king e1, black king h1, white pawn e7 — e7e8q must be legal.
+    fen = '8/4P3/8/8/8/8/8/4K2k w - - 0 1'
+    pos = PGN::FEN.new(fen).to_position
+    expect(pos.legal_moves).to include('e7e8q')
+  end
+end
