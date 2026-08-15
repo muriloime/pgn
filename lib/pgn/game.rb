@@ -135,6 +135,33 @@ module PGN
       positions.map { |p| p.to_fen.inspect }
     end
 
+    # Whether any position has occurred three times in this game (the
+    # threefold-repetition draw). Uses {PGN::Position#hash} (the Zobrist
+    # hash of the FEN-relevant state), streaming {#each_position} so the
+    # full position array need not be materialized for this check.
+    #
+    # @return [Boolean]
+    def threefold?
+      counts = Hash.new(0)
+      each_position { |position| counts[position.hash] += 1 }
+      counts.any? { |_, count| count >= 3 }
+    end
+
+    # The terminal status of the game: :checkmate, :stalemate, or :draw
+    # (insufficient material, 50-move rule, or threefold repetition). nil
+    # if the game is still in progress. Requires the native extension for
+    # checkmate/stalemate detection.
+    #
+    # @return [Symbol, nil]
+    def outcome
+      final = positions.last
+      result = final&.outcome
+      return result if result
+      return :draw if threefold?
+
+      nil
+    end
+
     # Interactively step through the game
     #
     # Use +d+ to move forward, +a+ to move backward, and +^C+ to exit.

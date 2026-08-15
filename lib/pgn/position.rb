@@ -194,6 +194,61 @@ module PGN
       PGN::Attack.attackers(board, board.index_of(square), color)
     end
 
+    # Whether the side to move has been checkmated (in check and no legal
+    # move). Requires the native extension for legal-move enumeration.
+    #
+    # @return [Boolean]
+    def checkmate?
+      in_check? && legal_moves.empty?
+    end
+
+    # Whether the side to move has been stalemated (not in check and no
+    # legal move). Requires the native extension.
+    #
+    # @return [Boolean]
+    def stalemate?
+      !in_check? && legal_moves.empty?
+    end
+
+    # Whether the position has insufficient material to mate. Covers K vs K,
+    # K + one minor vs K, and same-colored bishops only.
+    #
+    # @return [Boolean]
+    def insufficient_material?
+      non_king = (0...128).each_with_object([]) do |idx, acc|
+        next if idx.anybits?(0x88)
+
+        piece = board.at_index(idx)
+        acc << [piece, idx] if piece && piece.upcase != 'K'
+      end
+      return true if non_king.empty?
+      return true if non_king.size == 1 && %w[B N].include?(non_king.first.first.upcase)
+
+      bishops_same_color?(non_king)
+    end
+
+    # Whether the 50-move rule applies (100 halfmoves since the last pawn
+    # move or capture).
+    #
+    # @return [Boolean]
+    def fifty_move?
+      halfmove >= 100
+    end
+
+    # The terminal status of this position: :checkmate, :stalemate, or :draw
+    # (insufficient material or 50-move rule). nil if the position is still
+    # in progress. Threefold repetition requires game history and is
+    # answered by {PGN::Game#outcome}.
+    #
+    # @return [Symbol, nil]
+    def outcome
+      return :checkmate if checkmate?
+      return :stalemate if stalemate?
+      return :draw if insufficient_material? || fifty_move?
+
+      nil
+    end
+
     # @return [PGN::FEN] a {PGN::FEN} object representing the current position
     #
     def to_fen
@@ -292,6 +347,16 @@ module PGN
       when /\A[1-8]\z/ then rank == disambiguation
       else file + rank == disambiguation
       end
+    end
+
+    # Whether +non_king+ is all bishops on squares of the same color (a known
+    # insufficient-material draw, e.g. KB vs KB with same-colored bishops).
+    def bishops_same_color?(non_king)
+      return false unless non_king.all? { |piece, _| piece.upcase == 'B' }
+      return false if non_king.size > 2
+
+      colors = non_king.map { |_piece, idx| ((idx & 0x0F) + (idx >> 4)) % 2 }
+      colors.uniq.size == 1
     end
   end
 end
