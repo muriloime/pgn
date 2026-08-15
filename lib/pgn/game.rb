@@ -32,7 +32,8 @@ module PGN
     def clean_text(text)
       return unless text
 
-      text.gsub(/{(.*)}/, '\1').gsub(/\s+/, ' ').strip
+      text = text[1..-2] if text.start_with?('{') && text.end_with?('}')
+      text.gsub(/\s+/, ' ').strip
     end
   end
 
@@ -189,14 +190,14 @@ module PGN
     private
 
     # A MoveText is reused as-is (no new object) when its notation needs no
-    # '0'->'O' fix and its comment has no braces left to clean; a braced
-    # comment still needs MoveText.new's second clean_text pass to match the
-    # legacy whittle byte-output.
+    # '0'->'O' fix; otherwise a new MoveText is built. clean_text is idempotent
+    # (it only strips a *single* outermost brace pair), so reusing or rebuilding
+    # a MoveText never corrupts a comment that still contains inner braces.
     def standardize_castling(entry)
       return MoveText.new(entry.include?('0') ? entry.gsub('0', 'O') : entry) if entry.is_a?(String)
 
       notation = entry.notation.include?('0') ? entry.notation.gsub('0', 'O') : entry.notation
-      return entry if notation.equal?(entry.notation) && (entry.comment.nil? || !entry.comment.include?('{'))
+      return entry if notation.equal?(entry.notation)
 
       MoveText.new(notation, entry.annotation, entry.comment, entry.variations)
     end
