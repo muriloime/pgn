@@ -124,6 +124,43 @@ module PGN
       PGN::Bitboard::Engine.new(to_fen.to_s).legal_moves
     end
 
+    # All legal moves from this position as sorted SAN strings, computed
+    # by delegating the native engine's UCI move list through
+    # {PGN::Notation.san}. Requires the compiled native extension; raises
+    # NameError if it is absent.
+    #
+    # @return [Array<String>] sorted lexicographically
+    #
+    def legal_moves_san
+      engine = PGN::Bitboard::Engine.new(to_fen.to_s)
+      engine.legal_moves.map { |uci| uci_to_san(uci) }.sort
+    end
+
+    # Whether +move+ is legal. Accepts SAN ("Nf3", "e4", "O-O", "a8=Q",
+    # "Qxf7#") or UCI ("g1f3", "e2e4", "e1g1", "a7a8q"). Requires the
+    # compiled native extension; raises NameError if it is absent.
+    #
+    # UCI is handed straight to the engine. SAN is resolved against the
+    # engine's legal move list: a SAN string is legal only when it points
+    # at exactly one legal move (so an ambiguous "Nd2" with two knights
+    # is rejected, while "Nbd2"/"Nfd2" are accepted). The engine remains
+    # the single source of truth for legality (king safety, pins, etc.).
+    #
+    # @param move [String] SAN or UCI
+    # @return [Boolean]
+    def legal?(move)
+      engine = PGN::Bitboard::Engine.new(to_fen.to_s)
+      return engine.legal?(move) if uci?(move)
+
+      parsed = PGN::Move.new(move, player)
+      return false if parsed.destination.nil? && parsed.castle.nil?
+
+      candidates = engine.legal_moves.select { |uci| matches_san?(uci, parsed) }
+      candidates.size == 1
+    rescue StandardError
+      false
+    end
+
     def inspect
       "\n#{board.inspect}"
     end
@@ -166,6 +203,66 @@ module PGN
     # @return [Integer]
     def zobrist
       @zobrist ||= Zobrist.seed(board, player, castling, en_passant)
+    end
+
+    private
+
+    # True when +move+ looks like a UCI coordinate string ("e2e4",
+    # "e1g1", "a7a8q"), so it can be handed straight to the engine.
+    def uci?(move)
+      move.is_a?(String) && move.match?(/\A[a-h][1-8][a-h][1-8][qrbn]?\z/)
+    end
+
+    # Convert a UCI string to SAN using the current position, for
+    # {#legal_moves_san}. Promotion (if present) is passed as the letter.
+    def uci_to_san(uci)
+      from = uci[0, 2]
+      to = uci[2, 2]
+      promo = uci[4]
+      PGN::Notation.san(self, from, to, promo)
+    end
+
+    # Map a castling side letter from {PGN::Move#castle} to the king's
+    # from/to UCI squares for the side to move.
+    CASTLE_UCI = {
+      'K' => 'e1g1',
+      'Q' => 'e1c1',
+      'k' => 'e8g8',
+      'q' => 'e8c8'
+    }.freeze
+    private_constant :CASTLE_UCI
+
+    # Does the legal UCI move +uci+ match the parsed SAN +move+? A move
+    # matches when destination, piece, promotion, and castling all agree,
+    # and the origin square satisfies +move+'s disambiguation (if any).
+    def matches_san?(uci, move)
+      return uci == CASTLE_UCI[move.castle] if move.castle
+
+      to = uci[2, 2]
+      return false if move.destination != to
+
+      from_idx = board.index_of(uci[0, 2])
+      return false if board.at_index(from_idx) != move.piece
+
+      promo = uci[4]
+      return false if move.promotion&.downcase != promo
+
+      disambiguation_matches?(move.disambiguation, from_idx)
+    end
+
+    # Whether the disambiguation string from SAN (a file, a rank, or a full
+    # square) describes the origin square at +from_idx+. nil disambiguation
+    # matches any origin (ambiguity is handled by the caller counting matches).
+    def disambiguation_matches?(disambiguation, from_idx)
+      return true if disambiguation.nil? || disambiguation.empty?
+
+      file = Board::INDEX_TO_FILE[from_idx & 0x0F]
+      rank = Board::INDEX_TO_RANK[from_idx >> 4]
+      case disambiguation
+      when /\A[a-h]\z/ then file == disambiguation
+      when /\A[1-8]\z/ then rank == disambiguation
+      else file + rank == disambiguation
+      end
     end
   end
 end

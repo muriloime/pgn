@@ -47,6 +47,12 @@ describe PGN::FEN do
       next_pos = pos.move('d6')
       next_pos.to_fen.en_passant.should == '-'
     end
+
+    it 'preserves the en passant square through FEN#to_position' do
+      fen = 'rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3'
+      expect(PGN::FEN.new(fen).to_position.en_passant).to eq('d6')
+      expect(PGN::FEN.new(fen).to_position.to_fen.to_s).to eq(fen)
+    end
   end
 
   describe 'halfmove counter' do
