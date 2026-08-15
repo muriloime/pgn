@@ -165,6 +165,35 @@ module PGN
       "\n#{board.inspect}"
     end
 
+    # The color string for the side to move ('w'/'b').
+    def mover_color
+      player == :white ? 'w' : 'b'
+    end
+
+    # The color string for the opponent of the side to move ('w'/'b').
+    def opponent_color
+      player == :white ? 'b' : 'w'
+    end
+
+    # Whether the side to move's king is currently in check.
+    #
+    # @return [Boolean]
+    def in_check?
+      king = PGN::Attack.king_idx(board, mover_color)
+      !king.nil? && PGN::Attack.attacked?(board, king, opponent_color)
+    end
+
+    # The algebraic squares of every piece of the given color that attacks
+    # +square+ (algebraic, e.g. "e4"). Defaults to the side to move's
+    # opponent, which is useful for check detection.
+    #
+    # @param square [String] e.g. "e4"
+    # @param color [String, nil] 'w' or 'b'; defaults to the opponent color
+    # @return [Array<String>] squares attacking +square+
+    def attackers(square, color = opponent_color)
+      PGN::Attack.attackers(board, board.index_of(square), color)
+    end
+
     # @return [PGN::FEN] a {PGN::FEN} object representing the current position
     #
     def to_fen

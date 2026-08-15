@@ -145,8 +145,8 @@ module PGN
 
     def suffix(from_idx, to_idx, piece, promotion, castling)
       nb = apply_move(from_idx, to_idx, piece, promotion, castling)
-      opp_king = king_idx(nb, @enemy)
-      return '' unless opp_king && attacked?(nb, opp_king, @mover)
+      opp_king = PGN::Attack.king_idx(nb, @enemy)
+      return '' unless opp_king && PGN::Attack.attacked?(nb, opp_king, @mover)
 
       result_pos = PGN::Position.new(
         nb,
@@ -219,8 +219,8 @@ module PGN
       nb.update_index(ep, nil) if ep
       nb.update_index(from_idx, nil)
       nb.update_index(to_idx, piece)
-      king = king_idx(nb, @mover)
-      king && !attacked?(nb, king, @enemy)
+      king = PGN::Attack.king_idx(nb, @mover)
+      king && !PGN::Attack.attacked?(nb, king, @enemy)
     end
 
     # Does `piece` at `from_idx` pseudo-legally reach `to_idx` on the board?
@@ -278,66 +278,8 @@ module PGN
 
     # -- attack / legality helpers ----------------------------------------
 
-    def king_idx(board, color)
-      king = color == 'w' ? 'K' : 'k'
-      (0...128).each do |idx|
-        next if idx.anybits?(0x88)
-
-        return idx if board.at_index(idx) == king
-      end
-      nil
-    end
-
-    # Is `target` attacked by `color`-colored pieces on `board`?
-    def attacked?(board, target, color)
-      pawn_attacked?(board, target, color) ||
-        knight_attacked?(board, target, color) ||
-        king_attacked?(board, target, color) ||
-        slider_attacked?(board, target, color)
-    end
-
-    def pawn_attacked?(board, target, color)
-      offs = color == 'w' ? [-15, -17] : [15, 17]
-      pawn = color == 'w' ? 'P' : 'p'
-      offs.any? do |off|
-        i = target + off
-        i.nobits?(0x88) && board.at_index(i) == pawn
-      end
-    end
-
-    def knight_attacked?(board, target, color)
-      knight = color == 'w' ? 'N' : 'n'
-      Board::KNIGHT_ATTACKS[target].any? { |i| board.at_index(i) == knight }
-    end
-
-    def king_attacked?(board, target, color)
-      king = color == 'w' ? 'K' : 'k'
-      Board::KING_ATTACKS[target].any? { |i| board.at_index(i) == king }
-    end
-
-    def slider_attacked?(board, target, color)
-      bishop = color == 'w' ? 'B' : 'b'
-      rook = color == 'w' ? 'R' : 'r'
-      queen = color == 'w' ? 'Q' : 'q'
-      ray_hit?(board, target, BISHOP_DIRS) { |p| p == bishop || p == queen } ||
-        ray_hit?(board, target, ROOK_DIRS) { |p| p == rook || p == queen }
-    end
-
-    def ray_hit?(board, target, dirs)
-      dirs.each do |off|
-        i = target + off
-        while i.nobits?(0x88)
-          piece = board.at_index(i)
-          if piece
-            return true if yield(piece)
-
-            break
-          end
-          i += off
-        end
-      end
-      false
-    end
+    # (Attack detection is delegated to {PGN::Attack}, the shared source of
+    # truth used by {PGN::Position#in_check?} and {PGN::Position#attackers}.)
 
     # -- legal-move generation (for checkmate detection) ------------------
 
@@ -454,8 +396,8 @@ module PGN
       nb.update_index(from_idx, nil)
       nb.update_index(to_idx, place_piece(piece, promotion))
       color = own?(piece, 'w') ? 'w' : 'b'
-      king = king_idx(nb, color)
-      king && !attacked?(nb, king, color == 'w' ? 'b' : 'w')
+      king = PGN::Attack.king_idx(nb, color)
+      king && !PGN::Attack.attacked?(nb, king, color == 'w' ? 'b' : 'w')
     end
 
     # The piece letter to place on the destination after a pseudo-move.
