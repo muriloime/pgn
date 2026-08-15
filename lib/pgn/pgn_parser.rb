@@ -8,7 +8,7 @@ require 'racc/parser.rb'
 module PGN
   class PgnParser < Racc::Parser
 
-module_eval(<<'...end pgn_parser.y/module_eval...', 'pgn_parser.y', 97)
+module_eval(<<'...end pgn_parser.y/module_eval...', 'pgn_parser.y', 96)
 
   def parse(input)
     @lexer = PGN::Lexer.new(input)
@@ -71,37 +71,37 @@ racc_action_table = [
     21,    25,    31 ]
 
 racc_action_check = [
-     1,    28,     2,    28,    17,    28,     5,    17,     6,     1,
-    28,     9,     9,     9,    24,     9,    11,    24,    15,    18,
-    20,    23,    29 ]
+     1,    28,     2,    28,    17,    28,     4,    17,     6,     1,
+    28,    10,    10,    10,    24,    10,    11,    24,    15,    18,
+    19,    23,    29 ]
 
 racc_action_pointer = [
-   nil,     0,     2,   nil,   nil,    -3,     0,   nil,   nil,     8,
-   nil,    14,   nil,   nil,   nil,     7,   nil,     1,     9,   nil,
-     9,   nil,   nil,    15,    11,   nil,   nil,   nil,    -2,    16,
+   nil,     0,     2,   nil,    -3,   nil,     0,   nil,   nil,   nil,
+     8,    14,   nil,   nil,   nil,     7,   nil,     1,     9,     9,
+   nil,   nil,   nil,    15,    11,   nil,   nil,   nil,    -2,    16,
    nil,   nil,   nil ]
 
 racc_action_default = [
-    -1,   -25,   -25,    -2,    -8,    -4,   -25,    33,    -3,   -25,
-    -5,   -25,    -7,    -9,   -10,   -11,   -13,   -14,   -25,   -12,
+    -1,   -25,   -25,    -2,    -8,    -4,   -25,    33,    -3,    -5,
+   -25,   -25,    -7,    -9,   -10,   -11,   -13,   -14,   -25,   -12,
    -22,    -8,   -15,   -16,   -17,   -20,    -6,   -23,   -25,   -19,
    -18,   -21,   -24 ]
 
 racc_goto_table = [
-     9,    24,     4,    19,     1,     3,    10,    29,    27,     8,
-    22,   nil,   nil,   nil,   nil,   nil,   nil,    28 ]
+    10,    24,    20,     1,     3,     5,    27,    29,     9,     4,
+     8,    19,    22,   nil,   nil,   nil,   nil,    28 ]
 
 racc_goto_check = [
-     6,    11,     3,     9,     1,     2,     3,    11,     9,     4,
-    10,   nil,   nil,   nil,   nil,   nil,   nil,     6 ]
+     6,    11,    12,     1,     2,     5,    12,    11,     5,     3,
+     4,     9,    10,   nil,   nil,   nil,   nil,     6 ]
 
 racc_goto_pointer = [
-   nil,     4,     4,     1,     5,   nil,    -4,   nil,   nil,   -12,
-    -7,   -16,   nil ]
+   nil,     3,     3,     8,     6,     4,    -4,   nil,   nil,    -4,
+    -5,   -16,   -13 ]
 
 racc_goto_default = [
-   nil,   nil,   nil,   nil,   nil,     5,   nil,    13,    15,   nil,
-   nil,   nil,    20 ]
+   nil,   nil,   nil,   nil,   nil,   nil,   nil,    13,    15,   nil,
+   nil,   nil,   nil ]
 
 racc_reduce_table = [
   0, 0, :racc_error,
@@ -223,7 +223,7 @@ module_eval(<<'.,.,', 'pgn_parser.y', 15)
   def _reduce_3(val, _values, result)
             result = val[1].pop
         result = {
-          tags:    val[0],
+          tags:    val[0].reverse_each.with_object({}) { |pair, h| h.merge!(pair) },
           result:  result,
           moves:   val[1],
           pgn:     nil,
@@ -236,18 +236,18 @@ module_eval(<<'.,.,', 'pgn_parser.y', 15)
 
 module_eval(<<'.,.,', 'pgn_parser.y', 26)
   def _reduce_4(val, _values, result)
-     result = val[0]
+     result = [val[0]]
     result
   end
 .,.,
 
 module_eval(<<'.,.,', 'pgn_parser.y', 29)
   def _reduce_5(val, _values, result)
-            # Right-recursive with section.merge(pair) reproduces the legacy
-        # whittle parser's tag semantics exactly: reverse source insertion
-        # order, and first-occurrence-wins on duplicate keys. This keeps
-        # serialized tag order byte-compatible with the legacy behavior.
-        result = val[1].merge(val[0])
+            # Left-recursive; the source-order array is reduced to the legacy
+        # tag semantics in {pgn_game} (reverse, then merge with
+        # first-occurrence-wins) so the whittle-order compatibility quirk is
+        # a single explicit line instead of implicit in recursion direction.
+        result = val[0] << val[1]
 
     result
   end
@@ -294,7 +294,7 @@ module_eval(<<'.,.,', 'pgn_parser.y', 50)
 module_eval(<<'.,.,', 'pgn_parser.y', 54)
   def _reduce_12(val, _values, result)
             result = val[0]
-        result.variations = val[1]
+        result.variations = val[1].reverse
         result
 
     result
@@ -377,17 +377,16 @@ module_eval(<<'.,.,', 'pgn_parser.y', 82)
 
 module_eval(<<'.,.,', 'pgn_parser.y', 85)
   def _reduce_23(val, _values, result)
-            # Right-recursive prepend reproduces the legacy whittle parser's
-        # variation-order reversal on every parse. This keeps parsed-game
-        # serialization byte-compatible with the legacy behavior; the quirk
-        # can be fixed in a separate change.
-        result = val[1] << val[0]
+            # Left-recursive; the legacy variation-order reversal is applied as
+        # a single explicit `.reverse` where the list is consumed in
+        # {element}, instead of being implicit in recursion direction.
+        result = val[0] << val[1]
 
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 93)
+module_eval(<<'.,.,', 'pgn_parser.y', 92)
   def _reduce_24(val, _values, result)
      result = val[1]
     result

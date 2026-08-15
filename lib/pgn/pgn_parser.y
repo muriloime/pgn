@@ -15,7 +15,7 @@ rule
       {
         result = val[1].pop
         result = {
-          tags:    val[0],
+          tags:    val[0].reverse_each.with_object({}) { |pair, h| h.merge!(pair) },
           result:  result,
           moves:   val[1],
           pgn:     nil,
@@ -24,14 +24,14 @@ rule
       }
 
   tag_section:
-      tag_pair                            { result = val[0] }
-    | tag_pair tag_section
+      tag_pair                            { result = [val[0]] }
+    | tag_section tag_pair
       {
-        # Right-recursive with section.merge(pair) reproduces the legacy
-        # whittle parser's tag semantics exactly: reverse source insertion
-        # order, and first-occurrence-wins on duplicate keys. This keeps
-        # serialized tag order byte-compatible with the legacy behavior.
-        result = val[1].merge(val[0])
+        # Left-recursive; the source-order array is reduced to the legacy
+        # tag semantics in {pgn_game} (reverse, then merge with
+        # first-occurrence-wins) so the whittle-order compatibility quirk is
+        # a single explicit line instead of implicit in recursion direction.
+        result = val[0] << val[1]
       }
 
   tag_pair:
@@ -53,7 +53,7 @@ rule
     | san_move_annotated variation_list
       {
         result = val[0]
-        result.variations = val[1]
+        result.variations = val[1].reverse
         result
       }
     | COMMENT
@@ -81,13 +81,12 @@ rule
 
   variation_list:
       variation                           { result = [val[0]] }
-    | variation variation_list
+    | variation_list variation
       {
-        # Right-recursive prepend reproduces the legacy whittle parser's
-        # variation-order reversal on every parse. This keeps parsed-game
-        # serialization byte-compatible with the legacy behavior; the quirk
-        # can be fixed in a separate change.
-        result = val[1] << val[0]
+        # Left-recursive; the legacy variation-order reversal is applied as
+        # a single explicit `.reverse` where the list is consumed in
+        # {element}, instead of being implicit in recursion direction.
+        result = val[0] << val[1]
       }
 
   variation:
