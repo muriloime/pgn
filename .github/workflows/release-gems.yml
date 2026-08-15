@@ -6,9 +6,12 @@ name: release-gems
 # toolchain required. Push to RubyGems is gated on a published release;
 # `workflow_dispatch` builds + uploads artifacts without pushing.
 #
-# Targets (set inside the rake-compiler-dock environment):
+# The target platform list is configured in the Rakefile's
+# Rake::ExtensionTask (ext.cross_platform); keep that list as the single
+# source of truth.
+#
+# Targets:
 #   x86_64-linux, aarch64-linux, x86_64-darwin, aarch64-darwin
-# (configure the platform list in Rakefile cross-compile settings.)
 
 on:
   release:
