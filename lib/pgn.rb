@@ -1,5 +1,6 @@
 require 'pgn/board'
 require 'pgn/fen'
+require 'pgn/epd'
 require 'pgn/game'
 require 'pgn/move'
 require 'pgn/move_calculator'

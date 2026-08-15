@@ -123,6 +123,13 @@ module PGN
       )
     end
 
+    # @return [String] the EPD string for this position (the first four FEN
+    #   fields, dropping the halfmove/fullmove counters)
+    #
+    def to_epd
+      PGN::EPD.new("#{board_string} #{active} #{castling} #{en_passant}").to_s
+    end
+
     # @return [String] the FEN string
     # @example
     #   PGN::FEN.start.to_s #=> "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
