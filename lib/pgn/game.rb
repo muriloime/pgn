@@ -159,6 +159,16 @@ module PGN
       end
     end
 
+    # Build a fresh, navigable {PGN::Node} tree over the mainline. The tree
+    # is a live view of the underlying +MoveText+ structure; mutate it
+    # through the node API, then call +#root+ again for a fresh tree.
+    def root
+      PGN::Node.new(
+        move: nil, parent: nil, line: @moves, index: -1,
+        starting_position: starting_position, game: self
+      )
+    end
+
     private
 
     # A MoveText is reused as-is (no new object) when its notation needs no

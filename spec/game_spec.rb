@@ -129,4 +129,64 @@ describe PGN::Game do
       end
     end
   end
+
+  describe 'node mutation round-trip' do
+    non_round_trip = %w[doublequotes.pgn specialcharacters.pgn].freeze
+
+    # A node-sig tree with variations sorted, so the comparison is
+    # order-independent (the parser reverses variation order on each parse).
+    def node_sig(move)
+      [move.notation, (move.variations || []).map { line_sig(_1) }.sort]
+    end
+
+    def line_sig(line)
+      line.map { node_sig(_1) }
+    end
+
+    def tree_sig(game)
+      game.moves.map { node_sig(_1) }
+    end
+
+    # First node (DFS over children) that has at least one variation. Such a
+    # node always has a non-nil continuation, so add_variation can branch.
+    def first_branch_with_variations(node)
+      stack = [node]
+      until stack.empty?
+        n = stack.shift
+        return n unless n.variations.empty?
+
+        stack.concat(n.children)
+      end
+      nil
+    end
+
+    it 'every fixture survives promote/demote/add_variation and re-parses' do
+      fixtures = `git ls-files spec/pgn_files/`.split.map { |p| File.expand_path(p) }
+      fixtures.reject! { |p| non_round_trip.include?(File.basename(p)) }
+      fixtures.each do |path|
+        PGN.parse(File.read(path, encoding: Encoding::ISO_8859_1)).each do |game|
+          root = game.root
+
+          # promote then demote the first variation if one exists
+          branch = first_branch_with_variations(root)
+          if branch && !branch.variations.empty?
+            branch.variations.first.promote
+            game.root
+            b2 = first_branch_with_variations(game.root)
+            if b2 && !b2.variations.empty?
+              b2.variations.first.demote
+              game.root
+            end
+            b3 = first_branch_with_variations(game.root)
+            b3&.add_variation('Nc3')
+          end
+
+          once = game.to_pgn
+          reparsed = PGN.parse(once).first
+          expect(tree_sig(reparsed)).to eq(tree_sig(game)),
+                                        "#{path}: mutated game tree must round-trip (set-stable)"
+        end
+      end
+    end
+  end
 end
