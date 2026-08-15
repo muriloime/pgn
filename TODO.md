@@ -77,8 +77,9 @@ Out of scope for now: SVG rendering, Chess960, Shredder-FEN, FRC castling.
 - [ ] Streaming/lazy PGN reader: yield games from an `IO` without slurping
       the whole file.
 - [ ] EPD read/write (`EPD#to_position`, `FEN#to_epd`).
-- [ ] Richer game-tree API: node-style mainline/variations, add/promote/
-      demote variations.
+- [x] Richer game-tree API: node-style mainline/variations, add/promote/
+      demote variations. (See `docs/superpowers/specs/2026-08-15-game-tree-api-design.md`
+      and `lib/pgn/node.rb`.)
 - [ ] Nested-comment normalization + brace escaping for byte-perfect round
       trips.
 - [ ] Tolerant parse mode: collect warnings/errors instead of failing on the
