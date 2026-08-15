@@ -14,8 +14,6 @@ Out of scope for now: SVG rendering, Chess960, Shredder-FEN, FRC castling.
 
 - [ ] Streaming/lazy PGN reader: yield games from an `IO` without slurping
       the whole file.
-- [ ] Richer game-tree API: node-style mainline/variations, add/promote/
-      demote variations.
 
 ### Group 2 — Position Intelligence / Game Rules
 

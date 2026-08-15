@@ -22,6 +22,16 @@ install/packaging contract — hence 2.0.0 even though the Ruby API is
 purely additive (`PGN::Bitboard` is new; existing classes are untouched).
 
 ### Added
+- **`PGN::Node`** — a navigable, mutable game-tree view via
+  `PGN::Game#root`: parent/children/variation links, a lazy cached
+  pure-Ruby `Node#position` (no native-engine dependency), and variation
+  management (`add_variation`, `add_main_variation`, `promote`, `demote`,
+  `promote_to_main`, `demote_to_last`, `delete`). `MoveText` remains the
+  source of truth; mutations edit it in place and normalize the affected
+  branching point to flat sibling storage, so `Game#moves` and the
+  serializer stay correct and PGN round-trips remain byte-identical for
+  un-mutated games. Non-breaking — `Game#moves` and `MoveText` keep their
+  shapes.
 - **`PGN::Bitboard::Engine`** (native): `Engine.new(fen)`, `#perft(depth)`,
   `#legal_moves` (sorted UCI), `#legal?(uci)`. Validates against the
   published perft suite (startpos depth 6 = 119,060,324; Kiwipete depth 5

@@ -145,6 +145,33 @@ It handles captures, en passant, promotions, legal-move disambiguation
 (file / rank / full square, respecting pins), and check (`+`) / checkmate
 (`#`) suffixes.
 
+### Navigating and mutating the game tree
+
+{PGN::Game#root} returns a navigable {PGN::Node} tree over the mainline and
+its variations. A node knows its parent, its children (the mainline
+continuation first, then the variations), and the {PGN::Position} it
+represents. Mutations edit the underlying structure in place; call `#root`
+again for a fresh tree after mutating.
+
+```
+> game = PGN.parse(File.read("./examples/immortal_game.pgn")).first
+> root = game.root
+> root.main_line.map(&:notation)            # => ["e4", "e5", ...]
+> root.next.next.children.map(&:notation)   # alternatives at that position
+> root.next.next.position.to_fen.to_s       # the FEN after 1.e4 e5
+
+> root.next.next.add_variation("Nc6")       # add a variation
+> root = game.root                          # fresh tree after mutation
+> root.next.next.children.find { |n| n.notation == "Nc6" }.promote_to_main
+> game.to_pgn                                # serialized with the new mainline
+```
+
+`Node#position` is pure-Ruby (no native engine); it replays from the
+starting position and raises on an illegal SAN exactly like
+`Game#positions`. See `spec/node_spec.rb` for the full surface
+(`add_variation`, `add_main_variation`, `promote`, `demote`,
+`promote_to_main`, `demote_to_last`, `delete`).
+
 ## Benchmarks
 
 A reproducible profiling harness lives in `bench/`. It measures the
