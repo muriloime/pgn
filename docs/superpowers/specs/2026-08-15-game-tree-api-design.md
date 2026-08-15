@@ -85,10 +85,12 @@ So:
   for a variation's first move). When `m` is `nil` (end of line), `children` is
   empty.
 - The **first child** of each node is the mainline continuation; the rest are
-  variations in source order. `Game#moves` ≡ walking `root`'s first-child
-  chain and mapping `&:notation` (verified by a spec).
-- This recursion mirrors `Serializer#emit_line` / `#move_token` exactly, so
-  the node tree and the serialized output cannot disagree.
+  variations in source order. Walking the first-child chain *from the root's
+  first child onward* and mapping `&:notation` yields exactly `game.moves`
+  (`root.next`, `root.next.next`, … — the root itself is excluded, see
+  Navigation notes). This recursion mirrors `Serializer#emit_line` /
+  `#move_token` exactly, so the node tree and the serialized output cannot
+  disagree.
 
 ### Why nested-variation flattening is correct
 
@@ -118,13 +120,12 @@ class PGN::Node
   def variations    # children[1..] (the non-mainline alternatives)
   def main_line     # Enumerator<PGN::Node> of the first-child chain
   def next          # children.first (mainline continuation)
-  def previous      # parent (or nil for root / if parent is root and this is
-                    #   the root's first child — see note)
+  def previous      # parent (nil for root)
   def children      # Array<PGN::Node>, first_moves_of(continuation)
   def [](i)         # children[i]
-  def position       # lazy + cached: replay from root along parent chain
-                    #   via pure-Ruby PGN::Position#move(move.notation);
-                    #   raises on illegal SAN, same as Game#positions today
+  def position       # lazy + cached: parent.position.move(move.notation)
+                    #   (root == game.starting_position); pure-Ruby, no
+                    #   engine dep; raises on illegal SAN like Game#positions
   def promote        # move this node one slot toward index 0 in parent.children
   def demote         # move one slot toward the end (inverse-swap at index 0:
                     #   swap mainline down to variation #1 — see semantics)
@@ -145,28 +146,32 @@ end
 
 - `next` returns `children.first` (the mainline continuation) or `nil` at a
   terminal position.
-- `previous` returns `parent`. For the root's first child, `parent` is the
-  root; `previous` returns the root (whose `move` is `nil`). `root.previous`
-  is `nil`. (The root participates in the chain as the starting position, so
-  `main_line` includes it as the first element.)
-- `main_line` yields `root`, then `root.next`, then `root.next.next`, … It is
-  an `Enumerator` so it composes with the lazy `each_position` style already
-  in the gem.
+- `previous` returns `parent`. `root.previous` is `nil`. (The root
+  participates as the starting position but is not yielded by `main_line`.)
+- `main_line` yields `root.next`, then `root.next.next`, … — i.e. the nodes
+  reached by each mainline move, **excluding the root**. So
+  `main_line.map(&:notation) == game.moves.map(&:notation)` and
+  `main_line.map(&:position) == game.positions[1..]`. It is an `Enumerator`
+  so it composes with the lazy `each_position` style already in the gem.
+  The starting position is available via `game.root.position` (==
+  `game.starting_position`).
 
 ### `Node#position`
 
-Computed lazily and cached on the node: walk the parent chain to the root,
-then replay `root.position` forward applying each ancestor's `move.notation`
-via `PGN::Position#move`. Pure Ruby — no `PGN::Bitboard::Engine` dependency.
-On an illegal SAN it raises exactly as `Game#positions` does today (the
-replay path is shared). Cache is dropped implicitly when the node goes stale
-(after a structural mutation you fetch a fresh `#root`).
+Computed lazily and cached on the node: `node.position = parent.position
+.then { |p| p.move(move.notation) }` (recursive; each ancestor caches, so the
+first access is O(depth) and subsequent accesses are O(1); `root.position ==
+game.starting_position`). Pure Ruby via `PGN::Position#move` — no
+`PGN::Bitboard::Engine` dependency. On an illegal SAN it raises exactly as
+`Game#positions` does today (the replay path is shared). The cache lives on the
+`Node`, so it is dropped implicitly when the node goes stale (after a
+structural mutation you fetch a fresh `#root`).
 
 ### `add_variation` / `add_main_variation`
 
 Accept a single SAN `String` or an `Array<String>` (a sub-line). Internally
-build `MoveText`s through the same `standardize_castling` path that
-`Game#moves=` uses (so castling `0`↔`O` normalization is consistent), then
+build `MoveText`s with the **same castling `0`→`O` normalization** that
+`Game#moves=` / `standardize_castling` uses (so `O-O` stays canonical), then
 attach the new sub-line to the correct `MoveText.variations`:
 
 - The branching point for a node's children is the position **before** the
@@ -189,43 +194,107 @@ attach the new sub-line to the correct `MoveText.variations`:
 ### promote / demote / delete — `MoveText`-level edits
 
 Siblings in `parent.children` are ordered: index 0 = mainline continuation,
-1.. = variations. Reordering edits the underlying arrays.
+1.. = variations. The catch: in `MoveText` storage, siblings at one branch
+point are not always in a single array. The common case —
+`cont.variations = [V1, V2, V3]` (flat, as in `( V1 ) ( V2 ) ( V3 )`) — keeps
+all siblings in one array. The rare case — `( V1 ( V2 ( V3 ) ) )` — stores
+them nested (`cont.variations = [V1]`, `V1[0].variations = [V2]`, …) even
+though `V1`, `V2`, `V3` all branch at the same point. `first_moves_of`
+flattens both into one sibling list for *reading*; for *reordering* we need
+a single array to edit.
 
-**`promote_to_main`** — promote variation `V = [v0, *v_tail]` at a branching
-point where the current continuation is `cont` with tail `cont_tail`, and
-`cont.variations == [V, *others]` (V may be nested deeper; the edit targets
-the array containing `V`):
+**Flatten-on-mutation invariant.** Every structural mutation that reorders
+or removes siblings (`promote`, `demote`, `promote_to_main`, `demote_to_last`,
+`delete`) first **normalizes the affected branching point to flat sibling
+storage**, then performs the edit on that flat `variations` array.
+`add_variation` / `add_main_variation` also normalize so the sibling set stays
+flat and uniform. After normalization, every sibling at the point is a direct
+element of one `variations` array (the continuation's, or the new
+continuation's after a swap).
+
+Normalization is localized to one branch point: it hoists every variation
+first-move that branches at that point (recursively through nested brackets)
+into the continuation's `variations` array, and clears those first-moves'
+`variations` (the hoisted lines now live as separate flat siblings). The
+*internal* structure of each variation line (its tail moves and their own
+deeper variations) is untouched — only the nesting *at this branch point* is
+flattened. This is a documented mutation side-effect (a same-point-nested
+`( V1 ( V2 ) )` becomes `( V1 ) ( V2 )` after any reorder at that point); it
+is idempotent and the round-trip gate (below) asserts the mutated structure
+re-parses to itself. All current fixtures are already flat at every branch
+point, so for them normalization is a no-op.
+
+**Normalization algorithm** at a branching point whose continuation is `cont`
+(`cont = line[i]`):
 
 ```
-before: line[i]   = cont            ; line[i+1..] = cont_tail
-        cont.variations = [V, *others]
-after:  line[i]   = v0              ; line[i+1..] = v_tail       # V becomes mainline
-        v0.variations = [[cont, *cont_tail], *others]            # old mainline → variation
+def normalize(cont):
+  lines = []                       # flat sibling variation lines, DFS order
+  collect = ->(m) {
+    (m.variations || []).each do |v|   # v branches before m == at this point
+      lines << v
+      collect.call(v[0])           # nested same-point variations hoist too
+    end
+  }
+  collect.call(cont)
+  lines.each { |v| v[0].variations = (v[0].variations || []).clear }
+  # NB: each v[0]'s at-this-point variations are now hoisted into `lines`;
+  #     v[0]'s tail moves (v[1..]) and their deeper variations are untouched.
+  cont.variations = lines
+  lines
+end
 ```
 
-(When `V` is found nested inside another variation's `variations` rather than
-directly in `cont.variations`, the swap is performed at the array that
-actually holds `V`, and the "old continuation becomes a variation" step
-attaches to `v0` at the correct level. The general rule: the array element
-holding `v0`'s line is swapped to hold `cont`'s line and vice versa, and the
-tail arrays move with their heads.)
+After normalization `cont.variations = [V1, V2, …]` is a flat array of
+variation lines, in the same order `first_moves_of(cont)` yields. Reorders
+are then plain array edits:
 
-**`promote`** — move one slot toward index 0 (swap with the previous sibling);
-no-op if already index 0.
+**`promote`** — move this node's line one slot toward index 0 in
+`cont.variations` (swap with the previous element); no-op if it is already
+the continuation (index 0) or the first variation (index 1).
 
-**`demote`** — move one slot toward the end (swap with the next sibling). At
-index 0 this is the **inverse swap**: the current mainline (`cont`) is
-swapped down to become a variation, and variation #1 (`V`) becomes the new
-mainline — exactly the `promote_to_main` transformation applied to `V`. At the
-last index, `demote` is a no-op.
+**`demote`** — move one slot toward the end (swap with the next element).
+At index 0 (the node *is* the continuation `cont`), `demote` is the
+**inverse swap**: the first variation `V1 = cont.variations[0]` is promoted
+to continuation (see `promote_to_main` applied to `V1`), so the old
+mainline drops to variation #1. At the last index, `demote` is a no-op.
 
-**`demote_to_last`** — repeat `demote` until the node is the last sibling.
+**`promote_to_main`** — promote variation `Vk = [vk0, *vk_tail]` (currently
+`cont.variations[k]`) to the new mainline at this point:
 
-**`delete`** — remove this node's line from its parent's branching array
-(remove `V` from `cont.variations`, or remove the continuation `cont` and its
-tail from `line` if this node *is* the mainline). Removing the mainline
-continuation makes the next variation (if any) the new continuation; if there
-are no variations, the line is truncated.
+```
+flat      = cont.variations          # already normalized: [V1, …, Vk, …]
+vk        = flat.delete_at(k)        # [vk0, *vk_tail]
+old_tail  = line[i+1..]              # the old mainline tail (Array<MoveText>)
+line[i]   = vk0
+line[i+1..] = vk_tail                # V becomes the mainline
+cont.variations = []                 # old continuation no longer owns these
+vk0.variations = [[cont, *old_tail], *flat]   # old mainline → variation, others stay
+```
+
+**`demote_to_last`** — repeat `demote` until the node is the last sibling
+(equivalently: move its line to the end of `cont.variations`; if it was the
+continuation, that is one `promote_to_main`-of-the-next-variation plus a
+move-to-end — simplest implemented as repeated `demote`).
+
+**`delete`** — after normalization:
+- if the node is a variation `Vk`: `cont.variations.delete_at(k)`.
+- if the node is the continuation `cont`: remove it from the line. If
+  `cont.variations` is now non-empty, the first variation `V1` becomes the new
+  continuation (`line[i] = V1[0]`, `line[i+1..] = V1[1..]`, `V1[0].variations =
+  cont.variations[1..]`); otherwise the line is truncated at `i`
+  (`line[i..] = []`).
+
+**`add_variation(move_or_moves)`** — normalize, then append the new sub-line
+to `cont.variations`.
+
+**`add_main_variation(move_or_moves)`** — if the node is terminal
+(`cont`/continuation is `nil`), extend `line` with the new `MoveText`s (the
+natural "continue the game" operation). Otherwise normalize, build the new
+sub-line `N = [n0, *n_tail]`, insert it as the new continuation
+(`line[i] = n0`, `line[i+1..] = n_tail`) and set
+`n0.variations = [[cont, *old_tail], *cont.variations]` (the inverse of
+`promote_to_main`).
 
 ### After mutation
 
@@ -255,12 +324,13 @@ are no variations, the line is truncated.
 
 - **Shape:** for each fixture game, `game.root.main_line.map(&:notation) ==
   game.moves.map(&:notation)`.
-- **Positions:** for mainline nodes, `node.position.to_fen.to_s ==
-  game.positions[i].to_fen.to_s` (root ↔ `game.positions[0]`, etc.). For
-  variation nodes, assert against a hand-replayed FEN on a fixture with a
-  known variation (`spec/pgn_files/variations.pgn`).
+- **Positions:** `game.root.main_line.map(&:position) == game.positions[1..]`
+  (root excluded). For variation nodes, assert against a hand-replayed FEN
+  on `spec/pgn_files/variations.pgn` (e.g. the `Nc3` variation node's
+  position == the FEN after `1. e4 e5 2. Nc3`).
 - **Children/variation count:** assert `node.children.size` and
-  `node.variations.size` against fixture structure.
+  `node.variations.size` against fixture structure (e.g. the node after
+  `1.e4 e5` has 3 children: `Nf3`, `Nc3`, `f4`).
 - **`add_variation`:** append a SAN, assert the new `MoveText` appears in the
   target `MoveText.variations`, and `game.to_pgn` re-parses with the variation
   present.
@@ -270,6 +340,9 @@ are no variations, the line is truncated.
   assert the resulting `MoveText` structure (notations + variation layout)
   and that `game.to_pgn` round-trips.
 - **`demote` at index 0 is the inverse swap** (covered by a dedicated test).
+- **Flatten-on-mutation:** a synthetic `( V1 ( V2 ) )` same-point-nested
+  fixture, after a `promote`, re-serializes to flat `( V1 ) ( V2 )` and
+  re-parses idempotently.
 
 ### Extended round-trip gate (`spec/game_spec.rb`)
 
@@ -293,17 +366,22 @@ Unchanged; 241 examples stay green.
   stale-check (would need per-mutation bookkeeping on every `Node`); the
   round-trip gate catches structural mistakes, and the documentation makes the
   "re-`root` after mutation" contract explicit.
-- **`promote`/`demote` on deeply nested variations.** Mitigation: the edit
-  targets the array that actually holds the node's line; dedicated tests for
-  nested-variation fixtures (`spec/pgn_files/nested_comments.pgn` and a
-  synthetic nested-variation fixture).
+- **`promote`/`demote` on deeply nested variations.** Mitigation: the
+  flatten-on-mutation invariant reduces every reorder to a flat-array edit;
+  dedicated tests use `spec/pgn_files/variations.pgn` (flat at every branch
+  point) and a synthetic same-point-nested `( V1 ( V2 ) )` fixture to cover
+  the normalization path.
 - **Backward-compat drift in `Game#moves`.** Mitigation: `@moves` is mutated
   in place (not replaced with a new object type); existing specs compare
   `map(&:notation)` and `MoveText` structure — all still hold.
 
-## Open question (to resolve in plan, not blocking spec)
+## Decisions settled during self-review
 
-- Exact shape of `previous` for the root's first child (return root vs. nil).
-  Lean: return root (the starting position is a real node in `main_line`), so
-  `previous` is simply `parent` everywhere and `root.previous` is `nil`.
-  Finalized in the implementation plan.
+- `main_line` excludes the root (yields `root.next`, `root.next.next`, …) so
+  it lines up 1:1 with `game.moves` and `game.positions[1..]`.
+- `previous` is simply `parent` everywhere; `root.previous` is `nil`.
+- Structural mutations normalize the affected branching point to flat
+  sibling storage before editing (see "Flatten-on-mutation invariant"). This
+  resolves the nested-variation reorder case that the first draft hand-waved.
+- No runtime stale-check on `Node`; the "re-`root` after mutation" contract is
+  documented and enforced by the round-trip gate, not by per-node bookkeeping.
