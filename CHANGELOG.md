@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0 (unreleased)
+## 2.0.1 (2026-08-15)
 
 ### Summary
 
@@ -77,9 +77,16 @@ undefined when the extension is absent.
 
 ---
 
-## Unreleased (small/medium roadmap)
+## 2.0.0 (2026-08-15)
 
 ### Summary
+
+(Pre-release snapshot of the native Rust bitboard perft backend, before
+the small/medium roadmap and game-tree API work landed in 2.0.1.)
+
+---
+
+### Small + medium roadmap
 
 Small + medium TODO pass: public legal-move and outcome APIs on
 `PGN::Position`/`PGN::Game` delegating to the chessie engine, plus parsing
@@ -129,9 +136,7 @@ specs green, RuboCop clean.
 
 ---
 
-## Unreleased (attack-masks)
-
-### Summary
+### Attack masks
 
 Attack-mask pass: precomputed knight/king on-board target tables on
 `PGN::Board`, used by `Notation` (reaches/attacked/leaper moves) and

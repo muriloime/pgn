@@ -43,3 +43,9 @@ native engine rather than rewriting the logic in pure Ruby.
       (rake-compiler-dock) for x86_64/aarch64 linux+darwin; the Rakefile
       cross-compile config and `native:clean` task are wired, but the full
       Docker build still wants confirming on a machine with Docker.
+- [ ] `Engine#legal_p`/`legal?` compares candidate moves via
+      `chessie::Move`'s `PartialEq<str>`, which allocates a `String` via
+      `to_uci()` per candidate scanned. Currently negligible (offset by
+      `legal_moves()` now being stack-allocated `ArrayVec` instead of a
+      heap `Vec`, and dwarfed by movegen/FFI cost) — only worth a cheap
+      numeric comparison if `legal?` ever ends up in a genuine hot loop.
