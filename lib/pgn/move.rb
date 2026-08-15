@@ -74,7 +74,7 @@ module PGN
       (?<capture>        x            ){0}
       (?<disambiguation> [a-h]?[1-8]? ){0}
 
-      (?<castle>         O-O(?:-O)?    ){0}
+      (?<castle>         [O0]-[O0](?:-[O0])? ){0}
 
       (?<normal>
         \g<piece>?
@@ -112,7 +112,7 @@ module PGN
       # Castling SAN (O-O / O-O-O) has no piece attribute; the castle attribute
       # is set later in #initialize. Use a non-allocating prefix check instead
       # of `san.match('O-O')`, which allocated a MatchData on every Move.new.
-      return if san.start_with?('O')
+      return if san.start_with?('O') || san.start_with?('0')
 
       val ||= 'P'
       @piece = black? ? val.downcase : val
@@ -136,8 +136,8 @@ module PGN
     def castle=(val)
       return unless val
 
-      @castle = 'K' if val == 'O-O'
-      @castle = 'Q' if val == 'O-O-O'
+      @castle = 'K' if %w[O-O 0-0].include?(val)
+      @castle = 'Q' if %w[O-O-O 0-0-0].include?(val)
       @castle.downcase! if black?
     end
 
