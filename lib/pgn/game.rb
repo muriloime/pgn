@@ -140,6 +140,43 @@ module PGN
       positions.map { |p| p.to_fen.inspect }
     end
 
+    # The current {PGN::Position} (the last position after replaying all
+    # moves), or the starting position when there are no moves.
+    #
+    # @return [PGN::Position]
+    def current_position
+      positions.last
+    end
+
+    # Append a move in SAN, validating legality when the native engine is
+    # available. Raises ArgumentError for an illegal move (when the engine is
+    # loaded) and invalidates the memoized position list.
+    #
+    # @param san [String, PGN::MoveText] the move to append
+    # @return [self]
+    def push(san)
+      move = standardize_castling(san)
+      if PGN::Bitboard.const_defined?(:Engine, false) && !current_position.legal?(move.notation)
+        raise ArgumentError, "illegal move: #{san}"
+      end
+
+      @moves << move
+      @positions = nil
+      self
+    end
+
+    # Remove and return the last move, or nil if there are none. Invalidates
+    # the memoized position list.
+    #
+    # @return [PGN::MoveText, nil]
+    def pop
+      return nil if @moves.empty?
+
+      move = @moves.pop
+      @positions = nil
+      move
+    end
+
     # Whether any position has occurred three times in this game (the
     # threefold-repetition draw). Uses {PGN::Position#hash} (the Zobrist
     # hash of the FEN-relevant state), streaming {#each_position} so the
