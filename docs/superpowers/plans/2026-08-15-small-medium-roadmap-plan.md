@@ -4,6 +4,21 @@
 
 **Goal:** Clear the small and medium TODO items left in `TODO.md`, leaning on the chessie-backed `PGN::Bitboard::Engine` where it removes pure-Ruby rewrite work.
 
+**Status (2026-08-15):** All ten tasks implemented on branch `feat/small-medium-roadmap` (worktree `.worktrees/feat-small-medium-roadmap`). 311 specs green, RuboCop clean. Commits (newest first):
+
+- `ce5046f` M6: wire `cross_compile` config + `native:clean` task (Docker build still wants final verification)
+- `f76f791` M5: `Game#push`/`#pop` mutable history (legal-move validated)
+- `73b3afd` M4: nested-comment + brace-escape round-trip (clean_text unescapes)
+- `0e2a22a` M3: idempotent `MoveText#clean_text`, drop brace sniff
+- `aef5c59` S4: left-recursive `tag_section`/`variation_list` with explicit `.reverse`
+- `4616db6` S3: UCI-style castling (`0-0`) normalization
+- `018192f` S2: `PGN::EPD` read/write + `FEN#to_epd`
+- `8690543` M2: game/position outcome detection (checkmate/stalemate/insufficient/50-move/threefold)
+- `ad43774` M1: `Position#in_check?`/`#attackers` via extracted `PGN::Attack`
+- `99fac3f` S1: `Position#legal?` (SAN+UCI) + `#legal_moves_san`
+
+Remaining (carried to `TODO.md`): final Docker cross-compile verification (M6), tolerant parse mode, streaming reader, richer game-tree API, pin-aware helpers, UCI wrapper, incremental Zobrist.
+
 **Architecture:** The gem stays pure-Ruby for parsing/serialization/position replay; legal-move generation and perft delegate to the native `PGN::Bitboard::Engine` (adapter over `chessie`). New public APIs live on `PGN::Position` / `PGN::Game` and delegate to the engine or to existing private `PGN::Notation` logic. No new Rust is required for these tasks except where noted.
 
 **Tech Stack:** Ruby 3.0+, RSpec, RuboCop, Racc parser, `chessie` 2.0 via `pgn2-bitboard`/`pgn2_native`.

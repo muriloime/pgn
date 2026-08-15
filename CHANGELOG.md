@@ -67,6 +67,58 @@ undefined when the extension is absent.
 
 ---
 
+## Unreleased (small/medium roadmap)
+
+### Summary
+
+Small + medium TODO pass: public legal-move and outcome APIs on
+`PGN::Position`/`PGN::Game` delegating to the chessie engine, plus parsing
+and packaging hardening. Serialized PGN/FEN output stays byte-identical
+except where a task explicitly normalizes a quirk (nested comments are now
+escaped on output and unescaped on parse for stable round trips); 311
+specs green, RuboCop clean.
+
+### Added
+- **`PGN::Position#legal?(san_or_uci)`** and **`#legal_moves_san`**:
+  public legal-move API. `legal?` accepts SAN or UCI and resolves SAN by
+  matching `PGN::Notation.san` against the engine's legal moves (rejecting
+  ambiguous SAN). Raises `NameError` when the extension is absent.
+- **`PGN::Attack`** module + **`PGN::Position#in_check?`**, **`#attackers`**,
+  **`#mover_color`**, **`#opponent_color`**: attack detection extracted from
+  `Notation` private methods and exposed on `Position`.
+- **Game/position outcome detection**: `Position#checkmate?`/`#stalemate?`/
+  `#insufficient_material?`/`#fifty_move?`/`#outcome`, and `Game#threefold?`
+  (streams Zobrist hashes via `each_position`) / `Game#outcome`.
+- **`PGN::EPD`** read/write + **`PGN::FEN#to_epd`**: EPD shares FEN's first
+  four fields and keeps trailing operation fields verbatim.
+- **`PGN::Game#push(san)`** / **`#pop`**: mutable history; `push` validates
+  legality (raises `ArgumentError`) and invalidates the memoized position
+  list.
+
+### Changed
+- **`PGN::Move`**: parses `0-0`/`0-0-0` as castling (alongside `O-O`), so
+  UCI-style castling normalizes to canonical SAN through one path.
+- **Parser**: `tag_section` and `variation_list` are now ordinary
+  left-recursion with a single explicit `.reverse` (and first-occurrence-wins
+  tag merge) where each list is consumed; parse output is byte-identical
+  (same 2 shift/reduce conflicts).
+- **`MoveText#clean_text`**: idempotent — strips a single outermost brace
+  pair and unescapes `\{`/`\}`/`\\` into the canonical raw comment body, so
+  `Serializer` escaping and the lexer are symmetric and nested-comment
+  round trips are byte-stable. `Game#moves=` no longer sniffs comments for
+  leftover braces.
+- **`FEN#to_position`**: en passant square is no longer dropped (Ruby
+  conditional-assignment gotcha).
+- **Rakefile**: `Rake::ExtensionTask` now sets `cross_compile`/`cross_platform`
+  (single source of truth for `release-gems.yml`) and adds the `native:clean`
+  task that `native:gem` referenced.
+
+### Fixed
+- `FEN#to_position` en-passant round-trip regression (position lost the ep
+  square, which would have corrupted `legal?` and outcome detection).
+
+---
+
 ## Unreleased (attack-masks)
 
 ### Summary
