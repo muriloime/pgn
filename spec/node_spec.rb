@@ -1,23 +1,5 @@
 require 'spec_helper'
 
-# Helpers for order-independent variation comparison. The parser's
-# `variation_list` rule is right-recursive, so a move's variations are stored
-# in reverse of their PGN-text order; round-tripping flips that order each
-# parse. We therefore compare variation trees as sorted signatures (the same
-# approach the existing game_spec round-trip gate uses), and reference
-# variations by notation rather than by index.
-def node_sig(move)
-  [move.notation, (move.variations || []).map { line_sig(_1) }.sort]
-end
-
-def line_sig(line)
-  line.map { node_sig(_1) }
-end
-
-def tree_sig(game)
-  game.moves.map { node_sig(_1) }
-end
-
 describe PGN::Node do
   let(:game) { PGN.parse(File.read(File.expand_path('pgn_files/variations.pgn', __dir__), encoding: Encoding::ISO_8859_1)).first }
   let(:root) { game.root }

@@ -1,5 +1,3 @@
-use crate::moves::{Move, MoveList};
-
 /// A chess position backed by `chessie::Game`. Holds no chess logic of
 /// its own; every operation delegates. `Copy` because `chessie::Game`
 /// is `Copy`; `Default` because the magnus `Engine` wraps it in a
@@ -20,13 +18,7 @@ impl Board {
         self.game.perft(depth as usize)
     }
 
-    pub fn legal_moves(&self) -> MoveList {
-        let moves: Vec<Move> = self
-            .game
-            .get_legal_moves()
-            .into_iter()
-            .map(Move::from_chessie)
-            .collect();
-        MoveList(moves)
+    pub fn legal_moves(&self) -> chessie::MoveList {
+        self.game.get_legal_moves()
     }
 }

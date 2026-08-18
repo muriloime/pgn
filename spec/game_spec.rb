@@ -133,20 +133,6 @@ describe PGN::Game do
   describe 'node mutation round-trip' do
     non_round_trip = %w[doublequotes.pgn specialcharacters.pgn].freeze
 
-    # A node-sig tree with variations sorted, so the comparison is
-    # order-independent (the parser reverses variation order on each parse).
-    def node_sig(move)
-      [move.notation, (move.variations || []).map { line_sig(_1) }.sort]
-    end
-
-    def line_sig(line)
-      line.map { node_sig(_1) }
-    end
-
-    def tree_sig(game)
-      game.moves.map { node_sig(_1) }
-    end
-
     # First node (DFS over children) that has at least one variation. Such a
     # node always has a non-nil continuation, so add_variation can branch.
     def first_branch_with_variations(node)

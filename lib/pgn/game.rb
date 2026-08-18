@@ -29,6 +29,11 @@ module PGN
       @notation
     end
 
+    # Normalize UCI-style castling ('0-0') to canonical SAN ('O-O').
+    def self.normalize_castling(san)
+      san.include?('0') ? san.gsub('0', 'O') : san
+    end
+
     def clean_text(text)
       return unless text
 
@@ -150,7 +155,7 @@ module PGN
 
     # Append a move in SAN, validating legality when the native engine is
     # available. Raises ArgumentError for an illegal move (when the engine is
-    # loaded) and invalidates the memoized position list.
+    # loaded). Grows the memoized position list in step, if it is populated.
     #
     # @param san [String, PGN::MoveText] the move to append
     # @return [self]
@@ -161,31 +166,31 @@ module PGN
       end
 
       @moves << move
-      @positions = nil
+      @positions << @positions.last.move(move.notation) if @positions
       self
     end
 
-    # Remove and return the last move, or nil if there are none. Invalidates
-    # the memoized position list.
+    # Remove and return the last move, or nil if there are none. Shrinks the
+    # memoized position list in step, if it is populated.
     #
     # @return [PGN::MoveText, nil]
     def pop
       return nil if @moves.empty?
 
       move = @moves.pop
-      @positions = nil
+      @positions&.pop
       move
     end
 
     # Whether any position has occurred three times in this game (the
     # threefold-repetition draw). Uses {PGN::Position#hash} (the Zobrist
-    # hash of the FEN-relevant state), streaming {#each_position} so the
-    # full position array need not be materialized for this check.
+    # hash of the FEN-relevant state) over {#positions}, so a prior or
+    # subsequent call that also needs the position list shares the replay.
     #
     # @return [Boolean]
     def threefold?
       counts = Hash.new(0)
-      each_position { |position| counts[position.hash] += 1 }
+      positions.each { |position| counts[position.hash] += 1 }
       counts.any? { |_, count| count >= 3 }
     end
 
@@ -245,9 +250,9 @@ module PGN
     # (it only strips a *single* outermost brace pair), so reusing or rebuilding
     # a MoveText never corrupts a comment that still contains inner braces.
     def standardize_castling(entry)
-      return MoveText.new(entry.include?('0') ? entry.gsub('0', 'O') : entry) if entry.is_a?(String)
+      return MoveText.new(MoveText.normalize_castling(entry)) if entry.is_a?(String)
 
-      notation = entry.notation.include?('0') ? entry.notation.gsub('0', 'O') : entry.notation
+      notation = MoveText.normalize_castling(entry.notation)
       return entry if notation.equal?(entry.notation)
 
       MoveText.new(notation, entry.annotation, entry.comment, entry.variations)

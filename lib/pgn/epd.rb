@@ -14,6 +14,8 @@ module PGN
   #   PGN::FEN.start.to_epd #=> "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -"
   #
   class EPD
+    include PositionFields
+
     attr_accessor :board, :active, :ops
     attr_reader :castling, :en_passant
 
@@ -31,40 +33,11 @@ module PGN
       self.ops = fields[4]
     end
 
-    def castling=(val)
-      @castling = val.nil? || val.empty? ? '-' : val
-    end
-
-    def en_passant=(val)
-      @en_passant = val.nil? ? '-' : val
-    end
-
-    # @param board_fen [String] the FEN/EPD representation of the board
-    #
-    def board_string=(board_fen)
-      squares = board_fen.gsub(/\d/) { |match| '_' * match.to_i }
-                         .split('/')
-                         .map(&:chars)
-                         .map { |row| row.map { |e| e == '_' ? nil : e } }
-                         .reverse
-                         .transpose
-      self.board = PGN::Board.new(squares)
-    end
-
-    # @return [String] the EPD board-string portion
-    #
-    def board_string
-      board.fen_board_string
-    end
-
     # @return [PGN::Position] a {PGN::Position} for this EPD. Halfmove and
     #   fullmove default to 0 and 1 (EPD does not carry them).
     #
     def to_position
-      player = active == 'w' ? :white : :black
-      castling_rights = castling.chars - ['-']
-      ep = en_passant == '-' ? nil : en_passant
-
+      player, castling_rights, ep = position_fields
       PGN::Position.new(board, player, castling_rights, ep, 0, 1)
     end
 

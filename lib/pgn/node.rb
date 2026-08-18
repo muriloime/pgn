@@ -141,14 +141,7 @@ module PGN
         @line.push(*new_line)
       else
         normalize_branch_point(cont)
-        vars = cont.variations
-        pos = @index + 1
-        old_tail = @line[(pos + 1)..] || []
-        n0 = new_line[0]
-        @line[pos] = n0
-        @line[(pos + 1)..] = (new_line[1..] || [])
-        cont.variations = []
-        n0.variations = [[cont, *old_tail], *vars]
+        make_mainline(@line, @index + 1, cont, new_line, cont.variations, old_main_position: :first)
       end
       @game.root
     end
@@ -157,16 +150,9 @@ module PGN
     # No-op for the mainline (index 0) or the first variation (index 1).
     # Returns a fresh +game.root+.
     def promote
-      return @game.root if root?
-
-      i = sibling_index
-      return @game.root if i.nil? || i <= 1
-
-      cont = parent_continuation
-      normalize_branch_point(cont)
-      vars = cont.variations
-      vars[i - 1], vars[i - 2] = vars[i - 2], vars[i - 1]
-      @game.root
+      mutate_sibling(noop: ->(i) { i <= 1 }) do |i, _cont, vars|
+        vars[i - 1], vars[i - 2] = vars[i - 2], vars[i - 1]
+      end
     end
 
     # Move this node one slot toward the end among its siblings. At index 0
@@ -174,83 +160,54 @@ module PGN
     # mainline and the old mainline becomes variation #1. No-op at the last
     # index. Returns a fresh +game.root+.
     def demote
-      return @game.root if root?
-
-      i = sibling_index
-      sibs = @parent.children
-      return @game.root if i.nil? || i == sibs.size - 1
-
-      cont = parent_continuation
-      normalize_branch_point(cont)
-      vars = cont.variations
-      if i.zero?
-        v1 = vars.shift
-        make_mainline(cont, v1, vars, old_main_position: :first)
-      else
-        vars[i - 1], vars[i] = vars[i], vars[i - 1]
+      mutate_sibling(noop: ->(i) { i == @parent.children.size - 1 }) do |i, cont, vars|
+        if i.zero?
+          v1 = vars.shift
+          make_mainline(@parent.line, @parent.index + 1, cont, v1, vars, old_main_position: :first)
+        else
+          vars[i - 1], vars[i] = vars[i], vars[i - 1]
+        end
       end
-      @game.root
     end
 
     # Make this node the mainline at its branching point (the old mainline
     # becomes variation #1). No-op if already the mainline. Returns a
     # fresh +game.root+.
     def promote_to_main
-      return @game.root if root?
-
-      i = sibling_index
-      return @game.root if i.nil? || i.zero?
-
-      cont = parent_continuation
-      normalize_branch_point(cont)
-      vars = cont.variations
-      vk = vars.delete_at(i - 1)
-      make_mainline(cont, vk, vars, old_main_position: :first)
-      @game.root
+      mutate_sibling(noop: lambda(&:zero?)) do |i, cont, vars|
+        vk = vars.delete_at(i - 1)
+        make_mainline(@parent.line, @parent.index + 1, cont, vk, vars, old_main_position: :first)
+      end
     end
 
     # Move this node to the last position among its siblings. At index 0
     # the last variation becomes the new mainline and the old mainline
     # becomes the last variation. Returns a fresh +game.root+.
     def demote_to_last
-      return @game.root if root?
-
-      i = sibling_index
-      return @game.root if i.nil?
-
-      cont = parent_continuation
-      normalize_branch_point(cont)
-      vars = cont.variations
-      if i.zero?
-        return @game.root if vars.empty?
-
-        last = vars.pop
-        make_mainline(cont, last, vars, old_main_position: :last)
-      else
-        el = vars.delete_at(i - 1)
-        vars.push(el)
+      mutate_sibling do |i, cont, vars|
+        if i.zero?
+          unless vars.empty?
+            last = vars.pop
+            make_mainline(@parent.line, @parent.index + 1, cont, last, vars, old_main_position: :last)
+          end
+        else
+          el = vars.delete_at(i - 1)
+          vars.push(el)
+        end
       end
-      @game.root
     end
 
     # Remove this node and its subtree. If it is the mainline continuation,
     # the first remaining variation (if any) takes its place; otherwise the
     # line is truncated at this point. Returns a fresh +game.root+.
     def delete
-      return @game.root if root?
-
-      i = sibling_index
-      return @game.root if i.nil?
-
-      cont = parent_continuation
-      normalize_branch_point(cont)
-      vars = cont.variations
-      if i.zero?
-        delete_mainline_continuation(cont, vars)
-      else
-        vars.delete_at(i - 1)
+      mutate_sibling do |i, cont, vars|
+        if i.zero?
+          delete_mainline_continuation(cont, vars)
+        else
+          vars.delete_at(i - 1)
+        end
       end
-      @game.root
     end
 
     private
@@ -295,11 +252,25 @@ module PGN
     # SANs, applying the same castling 0->O normalization as Game#moves=.
     def build_movetexts(move_or_moves)
       sans = move_or_moves.is_a?(String) ? [move_or_moves] : move_or_moves
-      sans.map { |s| PGN::MoveText.new(normalize_castling(s)) }
+      sans.map { |s| PGN::MoveText.new(PGN::MoveText.normalize_castling(s)) }
     end
 
-    def normalize_castling(san)
-      san.include?('0') ? san.gsub('0', 'O') : san
+    # Shared prologue/epilogue for the sibling-reordering mutators (promote,
+    # demote, promote_to_main, demote_to_last, delete): no-op at the root or
+    # per +noop+ (checked against the sibling index before any mutation),
+    # otherwise normalize the branching point and yield the sibling index,
+    # the parent's mainline continuation, and its (now flat) variations to
+    # +block+ for the mutation proper. Always returns a fresh +game.root+.
+    def mutate_sibling(noop: nil)
+      return @game.root if root?
+
+      i = sibling_index
+      return @game.root if i.nil? || noop&.call(i)
+
+      cont = parent_continuation
+      normalize_branch_point(cont)
+      yield i, cont, cont.variations
+      @game.root
     end
 
     # Hoist every variation first-move branching at the position before
@@ -331,18 +302,24 @@ module PGN
       end
     end
 
-    # Make +vk+ (= [vk0, *tail]) the new mainline continuation at the
-    # parent's position, replacing +cont+. The old mainline (+cont+ and
-    # its tail) becomes a variation appended to +others+ either before
-    # (+old_main_position == :first+) or after (+:last+). +cont.variations+
-    # is cleared (its at-point variations are now +vk0+'s siblings).
-    def make_mainline(cont, variation, others, old_main_position:)
-      line = @parent.line
-      pos = @parent.index + 1
+    # Splice +movetexts+ (an Array<MoveText>) into +line+ starting at +pos+:
+    # its first entry replaces +line[pos]+, and the rest replace the tail
+    # after it (so a shorter +movetexts+ truncates +line+).
+    def splice_line!(line, pos, movetexts)
+      line[pos] = movetexts[0]
+      line[(pos + 1)..] = (movetexts[1..] || [])
+    end
+
+    # Make +vk+ (= [vk0, *tail]) the new mainline continuation at +line+/+pos+
+    # (the position before +cont+), replacing +cont+. The old mainline
+    # (+cont+ and its tail) becomes a variation appended to +others+ either
+    # before (+old_main_position == :first+) or after (+:last+).
+    # +cont.variations+ is cleared (its at-point variations are now +vk0+'s
+    # siblings).
+    def make_mainline(line, pos, cont, variation, others, old_main_position:)
       old_tail = line[(pos + 1)..] || []
       variation0 = variation[0]
-      line[pos] = variation0
-      line[(pos + 1)..] = (variation[1..] || [])
+      splice_line!(line, pos, variation)
       cont.variations = []
       old_var = [cont, *old_tail]
       variation0.variations =
@@ -361,11 +338,9 @@ module PGN
         line[pos..] = []
       else
         first_variation = vars.shift
-        first_variation_move = first_variation[0]
-        line[pos] = first_variation_move
-        line[(pos + 1)..] = (first_variation[1..] || [])
+        splice_line!(line, pos, first_variation)
         cont.variations = []
-        first_variation_move.variations = vars
+        first_variation[0].variations = vars
       end
     end
   end

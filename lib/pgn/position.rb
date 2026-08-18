@@ -179,8 +179,10 @@ module PGN
     #
     # @return [Boolean]
     def in_check?
+      return @in_check if defined?(@in_check)
+
       king = PGN::Attack.king_idx(board, mover_color)
-      !king.nil? && PGN::Attack.attacked?(board, king, opponent_color)
+      @in_check = !king.nil? && PGN::Attack.attacked?(board, king, opponent_color)
     end
 
     # The algebraic squares of every piece of the given color that attacks

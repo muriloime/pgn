@@ -5,8 +5,6 @@
 //! Ruby in the loop.
 
 pub mod board;
-pub mod moves;
 pub mod perft;
 
 pub use board::Board;
-pub use moves::{Move, MoveList};

@@ -32,10 +32,10 @@ impl Engine {
     }
 
     fn legal_p(&self, uci: String) -> bool {
-        match pgn2_bitboard::moves::uci_parse(&uci) {
-            Some(parsed) => self.0.borrow().legal_moves().iter().any(|m| m.same_target(parsed)),
-            None => false,
-        }
+        // `chessie::Move`'s `PartialEq<str>` compares by `to_uci()`, so this
+        // matches on castle/promotion notation the same way `legal_moves_ruby`
+        // renders it — no separate UCI parser needed.
+        self.0.borrow().legal_moves().iter().any(|m| m == &uci)
     }
 }
 
@@ -49,6 +49,6 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     engine.define_method("initialize", method!(Engine::initialize, 1))?;
     engine.define_method("perft", method!(Engine::perft, 1))?;
     engine.define_method("legal_moves", method!(Engine::legal_moves_ruby, 0))?;
-    engine.define_method("legal?", method!(Engine::legal_p, 1))?;;
+    engine.define_method("legal?", method!(Engine::legal_p, 1))?;
     Ok(())
 }
