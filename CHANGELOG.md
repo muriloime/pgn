@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.0.2 (2026-08-18)
+
+### Summary
+
+Internal refactor and performance pass — no public API changes. The
+`pgn2-bitboard` adapter drops its hand-rolled `Move`/`MoveList`/`uci_parse`
+layer in favor of `chessie`'s own `MoveList` and `Move: PartialEq<str>`
+(UCI comparison), and the Ruby side DRYs shared FEN/EPD parsing, memoizes
+`Position#in_check?`, and maintains `Game`'s position cache incrementally.
+
+### Changed
+
+- **`ext/pgn2_native`** — remove `pgn2-bitboard/src/moves.rs`;
+  `Board#legal_moves` returns `chessie::MoveList` directly and
+  `Engine#legal?` compares via `chessie::Move`'s `PartialEq<str>` (by
+  `to_uci()`), eliminating the separate UCI parser.
+- **`PGN::PositionFields`** — shared FEN/EPD module for board-string and
+  castling/en-passant field parsing; `FEN` and `EPD` now include it instead
+  of duplicating the logic.
+- **`PGN::Attack.attacked?`** — short-circuits pawn/knight/king checks before
+  the slider ray-walk (cheapest first), matching the previous result.
+- **`PGN::Position#in_check?`** — memoizes its result on first call.
+- **`PGN::Game`** — `push`/`pop` now grow/shrink the memoized `@positions`
+  list in step rather than invalidating it; `threefold?` reuses `#positions`.
+- **`PGN::MoveText.normalize_castling`** — castling `0`→`O` normalization
+  extracted as a class method (was a private `Node` helper).
+- **`PGN::Node`** — `promote`/`demote`/`promote_to_main`/`demote_to_last`/
+  `delete` share a `mutate_sibling` prologue/epilogue and a `splice_line!`
+  helper; behavior unchanged.
+
+---
+
 ## 2.0.1 (2026-08-15)
 
 ### Summary
