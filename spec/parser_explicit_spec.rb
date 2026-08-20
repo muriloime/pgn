@@ -176,10 +176,49 @@ RSpec.describe PGN, '.parse (racc parser)' do
     end
   end
 
+  describe 'move suffix (comments, NAGs, variations in any order)' do
+    it 'attaches two comments before a variation to the move' do
+      game = PGN.parse('[White "A"] 1. Bxh7+ Kxh7 {a} {b} (20... Kf8) 2. Ng5+ *').first
+      move = game.moves[1]
+      expect(move.notation).to eq('Kxh7')
+      expect(move.comment).to eq('a b')
+      expect(variations_as(move)).to eq([%w[Kf8]])
+    end
+
+    it 'attaches a comment after a variation to the same move' do
+      game = PGN.parse('[White "A"] 1. e4 (1... c5) {a} (2... f5) 2. Nf3 *').first
+      move = game.moves.first
+      expect(move.comment).to eq('a')
+      expect(variations_as(move).sort).to eq([%w[c5], %w[f5]].sort)
+    end
+
+    it 'merges an arbitrary mix of comments, NAGs, and variations' do
+      game = PGN.parse('[White "A"] 1. e4 {c1} $1 (1... d5) {c2} $2 *').first
+      move = game.moves.first
+      expect(move.comment).to eq('c1 c2')
+      expect(move.annotation).to eq(%w[$1 $2])
+      expect(variations_as(move)).to eq([%w[d5]])
+    end
+
+    it 'round-trips a multi-comment move through parse -> serialize -> parse' do
+      input = +"[White \"A\"]\n\n1. e4 {a} {b} (1... d5) *\n"
+      once = PGN.parse(input, Encoding::UTF_8).first.to_pgn
+      twice = PGN.parse(once, Encoding::UTF_8).first.to_pgn
+      expect(twice).to eq(once)
+    end
+  end
+
   describe 'pgn (verbatim raw text)' do
     it 'returns the verbatim text for a single game' do
       input = "[White \"A\"] 1. e4 1-0\n"
       expect(PGN.parse(input).first.pgn).to eq(input)
+    end
+
+    it 'does not mutate a frozen input string' do
+      input = "[White \"A\"] 1. e4 1-0\n".freeze
+      expect { PGN.parse(input, Encoding::UTF_8) }.not_to raise_error
+      expect(input.encoding).to eq(Encoding::UTF_8)
+      expect(PGN.parse(input, Encoding::UTF_8).first.pgn).to eq(input)
     end
 
     it 'partitions consecutive games contiguously' do

@@ -50,12 +50,6 @@ rule
   element:
       MOVE_NUMBER                         { result = nil }
     | san_move_annotated
-    | san_move_annotated variation_list
-      {
-        result = val[0]
-        result.variations = val[1].reverse
-        result
-      }
     | COMMENT
       {
         # A standalone comment (not attached to a move) becomes the game
@@ -66,28 +60,25 @@ rule
 
   san_move_annotated:
       SAN_MOVE                            { result = MoveText.new(val[0]) }
-    | SAN_MOVE move_trailer                { result = MoveText.new(val[0], *val[1]) }
+    | SAN_MOVE move_suffix                { result = build_move(val[0], val[1]) }
 
-  # [annotation_list, comment], in whichever order they followed the move.
-  move_trailer:
-      COMMENT                             { result = [nil, val[0]] }
-    | annotation_list                      { result = [val[0], nil] }
-    | annotation_list COMMENT              { result = [val[0], val[1]] }
-    | COMMENT annotation_list              { result = [val[1], val[0]] }
+  # The trailing material after a move: any number of comments, NAGs, and
+  # variations, in any order (PGN spec §3.2.5). Each suffix item is tagged
+  # [:comment, c] | [:nags, a] | [:variation, v]; {build_move} folds them
+  # onto the MoveText. This generalizes the old single-comment move_trailer,
+  # which rejected two comments before a variation (`{a} {b} (...)`).
+  move_suffix:
+      suffix_item                        { result = [val[0]] }
+    | move_suffix suffix_item            { result = val[0] << val[1] }
+
+  suffix_item:
+      COMMENT                            { result = [:comment, val[0]] }
+    | annotation_list                    { result = [:nags, val[0]] }
+    | variation                          { result = [:variation, val[0]] }
 
   annotation_list:
-      NAG                                 { result = [val[0]] }
-    | annotation_list NAG                  { result = val[0] << val[1] }
-
-  variation_list:
-      variation                           { result = [val[0]] }
-    | variation_list variation
-      {
-        # Left-recursive; the legacy variation-order reversal is applied as
-        # a single explicit `.reverse` where the list is consumed in
-        # {element}, instead of being implicit in recursion direction.
-        result = val[0] << val[1]
-      }
+      NAG                                { result = [val[0]] }
+    | annotation_list NAG                 { result = val[0] << val[1] }
 
   variation:
       '(' element_sequence ')'            { result = val[1] }
@@ -112,6 +103,26 @@ rule
   end
 
   private
+
+  # Fold a move's trailing suffix (comments, NAGs, variations, in any
+  # order) onto a MoveText. Multiple comments are concatenated with a
+  # space after each is individually cleaned; NAGs are merged in order;
+  # variations are collected in source order and then reversed, preserving
+  # the legacy order the serializer and round-trip specs depend on.
+  def build_move(notation, suffix)
+    comment_parts = []
+    nags = nil
+    variations = []
+    suffix.each do |kind, payload|
+      case kind
+      when :comment   then comment_parts << MoveText.clean_text(payload)
+      when :nags       then nags = nags ? nags + payload : payload
+      when :variation  then variations << payload
+      end
+    end
+    comment = comment_parts.empty? ? nil : comment_parts.join(' ')
+    MoveText.new(notation, nags, comment, variations.reverse)
+  end
 
   # Punctuation tokens are racc'd by their literal character (taken from
   # PGN::Lexer::LITERAL_BYTES, the single source of truth for those

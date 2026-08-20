@@ -1,5 +1,46 @@
 # Changelog
 
+## 2.0.3 (2026-08-20)
+
+### Summary
+
+Parser fix: a move may now be followed by any number of comments, NAGs,
+and variations, in any order (PGN spec §3.2.5). Previously the grammar
+accepted only a single trailing comment before a variation, so common
+real-world annotations like `1... Kxh7 {a} {[%cal ...]} (20... Kf8)` raised
+`parse error on value "("` and whole files were skipped. No public API
+changes; `MoveText#comment` and `#variations` keep their existing shapes.
+
+### Changed
+
+- **`PGN::PgnParser` (grammar)** — replace the single-comment
+  `move_trailer` + separate `variation_list` with a `move_suffix` list of
+  `[:comment, c] | [:nags, a] | [:variation, v]` items folded onto the
+  move by the new `build_move` helper. Multiple comments on one move are
+  concatenated with a space (each cleaned individually); variations keep
+  the legacy reversed storage order so round-trip and serializer behavior
+  are unchanged.
+- **`PGN::MoveText.clean_text`** — extracted as a class method so the
+  parser can clean each trailing comment before merging; the instance
+  method delegates to it (behavior unchanged).
+
+### Fixed
+
+- Two (or more) comments before a variation no longer abort parsing.
+- A comment appearing after a variation now attaches to the move it
+  follows instead of becoming a stray game comment.
+- `PGN.parse` no longer mutates the caller's input string (it dups before
+  `force_encoding`), so frozen-string-literal callers no longer raise
+  FrozenError on the target Ruby.
+
+### Known issues
+
+- A lone backslash inside a comment that is not part of `\\`, `\{`, or
+  `\}` (e.g. `{/\Ba3#}`) still raises an "Unmatched input" lexer error;
+  the comment escape grammar remains stricter than the PGN spec.
+
+---
+
 ## 2.0.2 (2026-08-18)
 
 ### Summary

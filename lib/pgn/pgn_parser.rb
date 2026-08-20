@@ -8,7 +8,7 @@ require 'racc/parser.rb'
 module PGN
   class PgnParser < Racc::Parser
 
-module_eval(<<'...end pgn_parser.y/module_eval...', 'pgn_parser.y', 96)
+module_eval(<<'...end pgn_parser.y/module_eval...', 'pgn_parser.y', 87)
 
   def parse(input)
     @lexer = PGN::Lexer.new(input)
@@ -28,6 +28,26 @@ module_eval(<<'...end pgn_parser.y/module_eval...', 'pgn_parser.y', 96)
   end
 
   private
+
+  # Fold a move's trailing suffix (comments, NAGs, variations, in any
+  # order) onto a MoveText. Multiple comments are concatenated with a
+  # space after each is individually cleaned; NAGs are merged in order;
+  # variations are collected in source order and then reversed, preserving
+  # the legacy order the serializer and round-trip specs depend on.
+  def build_move(notation, suffix)
+    comment_parts = []
+    nags = nil
+    variations = []
+    suffix.each do |kind, payload|
+      case kind
+      when :comment   then comment_parts << MoveText.clean_text(payload)
+      when :nags       then nags = nags ? nags + payload : payload
+      when :variation  then variations << payload
+      end
+    end
+    comment = comment_parts.empty? ? nil : comment_parts.join(' ')
+    MoveText.new(notation, nags, comment, variations.reverse)
+  end
 
   # Punctuation tokens are racc'd by their literal character (taken from
   # PGN::Lexer::LITERAL_BYTES, the single source of truth for those
@@ -66,42 +86,44 @@ module_eval(<<'...end pgn_parser.y/module_eval...', 'pgn_parser.y', 96)
 ##### State transition tables begin ###
 
 racc_action_table = [
-     2,    16,     7,    17,    23,    14,     6,    25,    11,     6,
-    32,    16,    12,    17,    30,    14,    18,    31,    21,    26,
-    21,    25,    31 ]
+     2,    16,     7,    17,    21,    14,     6,    24,    21,     6,
+    30,    24,    25,    16,    12,    17,    25,    14,    11,    18,
+    26,    28 ]
 
 racc_action_check = [
-     1,    28,     2,    28,    17,    28,     4,    17,     6,     1,
-    28,    10,    10,    10,    24,    10,    11,    24,    15,    18,
-    19,    23,    29 ]
+     1,    29,     2,    29,    17,    29,     4,    17,    19,     1,
+    29,    19,    17,    10,    10,    10,    19,    10,     6,    11,
+    18,    22 ]
 
 racc_action_pointer = [
-   nil,     0,     2,   nil,    -3,   nil,     0,   nil,   nil,   nil,
-     8,    14,   nil,   nil,   nil,     7,   nil,     1,     9,     9,
-   nil,   nil,   nil,    15,    11,   nil,   nil,   nil,    -2,    16,
-   nil,   nil,   nil ]
+   nil,     0,     2,   nil,    -3,   nil,    10,   nil,   nil,   nil,
+    10,    17,   nil,   nil,   nil,   nil,   nil,     1,    10,     5,
+   nil,   nil,    15,   nil,   nil,   nil,   nil,   nil,   nil,    -2,
+   nil ]
 
 racc_action_default = [
-    -1,   -25,   -25,    -2,    -8,    -4,   -25,    33,    -3,    -5,
-   -25,   -25,    -7,    -9,   -10,   -11,   -13,   -14,   -25,   -12,
-   -22,    -8,   -15,   -16,   -17,   -20,    -6,   -23,   -25,   -19,
-   -18,   -21,   -24 ]
+    -1,   -23,   -23,    -2,    -8,    -4,   -23,    31,    -3,    -5,
+   -23,   -23,    -7,    -9,   -10,   -11,   -12,   -13,   -23,   -14,
+   -15,   -17,   -18,   -19,   -20,    -8,    -6,   -16,   -21,   -23,
+   -22 ]
 
 racc_goto_table = [
-    10,    24,    20,     1,     3,     5,    27,    29,     9,     4,
-     8,    19,    22,   nil,   nil,   nil,   nil,    28 ]
+    10,     5,     1,    20,     9,    27,     3,     4,     8,    19,
+   nil,   nil,   nil,   nil,   nil,   nil,   nil,   nil,   nil,   nil,
+   nil,    29 ]
 
 racc_goto_check = [
-     6,    11,    12,     1,     2,     5,    12,    11,     5,     3,
-     4,     9,    10,   nil,   nil,   nil,   nil,     6 ]
+     6,     5,     1,    10,     5,    10,     2,     3,     4,     9,
+   nil,   nil,   nil,   nil,   nil,   nil,   nil,   nil,   nil,   nil,
+   nil,     6 ]
 
 racc_goto_pointer = [
-   nil,     3,     3,     8,     6,     4,    -4,   nil,   nil,    -4,
-    -5,   -16,   -13 ]
+   nil,     2,     5,     6,     4,     0,    -4,   nil,   nil,    -8,
+   -14,   nil,   nil ]
 
 racc_goto_default = [
    nil,   nil,   nil,   nil,   nil,   nil,   nil,    13,    15,   nil,
-   nil,   nil,   nil ]
+   nil,    22,    23 ]
 
 racc_reduce_table = [
   0, 0, :racc_error,
@@ -116,23 +138,21 @@ racc_reduce_table = [
   2, 19, :_reduce_9,
   1, 20, :_reduce_10,
   1, 20, :_reduce_none,
-  2, 20, :_reduce_12,
-  1, 20, :_reduce_13,
-  1, 21, :_reduce_14,
-  2, 21, :_reduce_15,
-  1, 23, :_reduce_16,
+  1, 20, :_reduce_12,
+  1, 21, :_reduce_13,
+  2, 21, :_reduce_14,
+  1, 22, :_reduce_15,
+  2, 22, :_reduce_16,
   1, 23, :_reduce_17,
-  2, 23, :_reduce_18,
-  2, 23, :_reduce_19,
+  1, 23, :_reduce_18,
+  1, 23, :_reduce_19,
   1, 24, :_reduce_20,
   2, 24, :_reduce_21,
-  1, 22, :_reduce_22,
-  2, 22, :_reduce_23,
-  3, 25, :_reduce_24 ]
+  3, 25, :_reduce_22 ]
 
-racc_reduce_n = 25
+racc_reduce_n = 23
 
-racc_shift_n = 33
+racc_shift_n = 31
 
 racc_token_table = {
   false => 0,
@@ -193,8 +213,8 @@ Racc_token_to_s_table = [
   "element_sequence",
   "element",
   "san_move_annotated",
-  "variation_list",
-  "move_trailer",
+  "move_suffix",
+  "suffix_item",
   "annotation_list",
   "variation" ]
 Ractor.make_shareable(Racc_token_to_s_table) if defined?(Ractor)
@@ -293,16 +313,6 @@ module_eval(<<'.,.,', 'pgn_parser.y', 50)
 
 module_eval(<<'.,.,', 'pgn_parser.y', 54)
   def _reduce_12(val, _values, result)
-            result = val[0]
-        result.variations = val[1].reverse
-        result
-
-    result
-  end
-.,.,
-
-module_eval(<<'.,.,', 'pgn_parser.y', 60)
-  def _reduce_13(val, _values, result)
             # A standalone comment (not attached to a move) becomes the game
         # comment; the last such comment in the game wins.
         @game_comment = val[0]
@@ -312,82 +322,71 @@ module_eval(<<'.,.,', 'pgn_parser.y', 60)
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 67)
-  def _reduce_14(val, _values, result)
+module_eval(<<'.,.,', 'pgn_parser.y', 61)
+  def _reduce_13(val, _values, result)
      result = MoveText.new(val[0])
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 68)
+module_eval(<<'.,.,', 'pgn_parser.y', 62)
+  def _reduce_14(val, _values, result)
+     result = build_move(val[0], val[1])
+    result
+  end
+.,.,
+
+module_eval(<<'.,.,', 'pgn_parser.y', 70)
   def _reduce_15(val, _values, result)
-     result = MoveText.new(val[0], *val[1])
+     result = [val[0]]
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 72)
+module_eval(<<'.,.,', 'pgn_parser.y', 71)
   def _reduce_16(val, _values, result)
-     result = [nil, val[0]]
-    result
-  end
-.,.,
-
-module_eval(<<'.,.,', 'pgn_parser.y', 73)
-  def _reduce_17(val, _values, result)
-     result = [val[0], nil]
+     result = val[0] << val[1]
     result
   end
 .,.,
 
 module_eval(<<'.,.,', 'pgn_parser.y', 74)
-  def _reduce_18(val, _values, result)
-     result = [val[0], val[1]]
+  def _reduce_17(val, _values, result)
+     result = [:comment, val[0]]
     result
   end
 .,.,
 
 module_eval(<<'.,.,', 'pgn_parser.y', 75)
-  def _reduce_19(val, _values, result)
-     result = [val[1], val[0]]
+  def _reduce_18(val, _values, result)
+     result = [:nags, val[0]]
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 78)
+module_eval(<<'.,.,', 'pgn_parser.y', 76)
+  def _reduce_19(val, _values, result)
+     result = [:variation, val[0]]
+    result
+  end
+.,.,
+
+module_eval(<<'.,.,', 'pgn_parser.y', 79)
   def _reduce_20(val, _values, result)
      result = [val[0]]
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 79)
+module_eval(<<'.,.,', 'pgn_parser.y', 80)
   def _reduce_21(val, _values, result)
      result = val[0] << val[1]
     result
   end
 .,.,
 
-module_eval(<<'.,.,', 'pgn_parser.y', 82)
+module_eval(<<'.,.,', 'pgn_parser.y', 83)
   def _reduce_22(val, _values, result)
-     result = [val[0]]
-    result
-  end
-.,.,
-
-module_eval(<<'.,.,', 'pgn_parser.y', 85)
-  def _reduce_23(val, _values, result)
-            # Left-recursive; the legacy variation-order reversal is applied as
-        # a single explicit `.reverse` where the list is consumed in
-        # {element}, instead of being implicit in recursion direction.
-        result = val[0] << val[1]
-
-    result
-  end
-.,.,
-
-module_eval(<<'.,.,', 'pgn_parser.y', 92)
-  def _reduce_24(val, _values, result)
      result = val[1]
     result
   end

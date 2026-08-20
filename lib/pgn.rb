@@ -26,6 +26,10 @@ module PGN
   # @see http://www.chessclub.com/help/PGN-spec PGN Specification
   #
   def self.parse(pgn, encoding = Encoding::ISO_8859_1)
+    # Operate on a private copy so a frozen caller string is never mutated
+    # (force_encoding mutates its receiver; under frozen-string literals
+    # this would otherwise raise FrozenError on the target Ruby).
+    pgn = pgn.dup
     pgn.force_encoding(encoding) if encoding
 
     PGN::Parser.new.parse(pgn).map do |game|

@@ -9,7 +9,7 @@ module PGN
     def initialize(notation, annotation = nil, comment = nil, variations = [])
       @notation = notation
       @annotation = annotation
-      @comment = clean_text(comment)
+      @comment = MoveText.clean_text(comment)
       @variations = variations
     end
 
@@ -34,15 +34,21 @@ module PGN
       san.include?('0') ? san.gsub('0', 'O') : san
     end
 
-    def clean_text(text)
+    # Strip the single outermost brace pair, then unescape \{ \} \\ so
+    # the internal representation is the raw comment body. {Serializer}
+    # re-escapes on output, so parse -> serialize -> parse is byte-stable.
+    # Exposed as a class method so the parser can clean each trailing comment
+    # individually before concatenating multiple comments on one move.
+    def self.clean_text(text)
       return unless text
 
-      # Strip the single outermost brace pair, then unescape \{ \} \\ so
-      # the internal representation is the raw comment body. {Serializer}
-      # re-escapes on output, so parse -> serialize -> parse is byte-stable.
       text = text[1..-2] if text.start_with?('{') && text.end_with?('}')
       text = text.gsub(/\\([\\{}])/, '\1')
       text.gsub(/\s+/, ' ').strip
+    end
+
+    def clean_text(text)
+      MoveText.clean_text(text)
     end
   end
 
